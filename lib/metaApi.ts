@@ -1,9 +1,12 @@
 const META_API_BASE = 'https://graph.facebook.com/v19.0';
-const ACCESS_TOKEN = process.env.META_SYSTEM_USER_TOKEN;
 
-if (!ACCESS_TOKEN) {
-  throw new Error('META_SYSTEM_USER_TOKEN environment variable is not set');
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`[META] Missing env var: ${name}`);
+  return v;
 }
+
+const ACCESS_TOKEN = requireEnv('META_SYSTEM_USER_TOKEN');
 
 async function metaApiCall(endpoint: string, params?: Record<string, string>): Promise<any> {
   const url = new URL(`${META_API_BASE}${endpoint}`);
