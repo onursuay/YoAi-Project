@@ -280,3 +280,58 @@ export async function getMetaAds(adAccountId: string) {
   return ads;
 }
 
+export async function getMetaOverview(adAccountId: string) {
+  const formattedAccountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
+  
+  const data = await metaApiCall(`/${formattedAccountId}/insights`, {
+    fields: 'spend,impressions,clicks,ctr,cpc,actions,frequency',
+    time_range: JSON.stringify({
+      since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      until: new Date().toISOString().split('T')[0],
+    }),
+  }, formattedAccountId);
+
+  const insights = data.data?.[0] || {};
+  const spend = parseFloat(insights.spend || '0');
+  const impressions = parseFloat(insights.impressions || '0');
+  const clicks = parseFloat(insights.clicks || '0');
+  const cpc = parseFloat(insights.cpc || '0');
+  const frequency = parseFloat(insights.frequency || '0');
+  
+  const actions = insights.actions || [];
+  const conversions = actions.find((a: any) => 
+    a.action_type === 'purchase' || a.action_type === 'offsite_conversion'
+  )?.value || '0';
+
+  return {
+    totalSpend: `₺${spend.toFixed(2)}`,
+    avgCPC: `₺${cpc.toFixed(2)}`,
+    conversions: parseInt(conversions).toLocaleString(),
+    frequency: frequency.toFixed(1),
+  };
+}
+
+export async function getMetaReports(adAccountId: string, days: number = 30) {
+  const formattedAccountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
+  
+  const data = await metaApiCall(`/${formattedAccountId}/insights`, {
+    fields: 'date_start,date_stop,spend',
+    time_range: JSON.stringify({
+      since: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      until: new Date().toISOString().split('T')[0],
+    }),
+    time_increment: '1',
+  }, formattedAccountId);
+
+  const dailyData = (data.data || []).map((item: any) => {
+    const date = new Date(item.date_start);
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return {
+      name: dayNames[date.getDay()],
+      spend: parseFloat(item.spend || '0'),
+    };
+  });
+
+  return { dailyData };
+}
+

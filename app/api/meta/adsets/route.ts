@@ -8,8 +8,8 @@ export async function GET(request: NextRequest) {
 
     if (!accountId) {
       return NextResponse.json(
-        { error: 'No ad account selected' },
-        { status: 401 }
+        { error: 'No ad account selected. Please select an ad account first.' },
+        { status: 400 }
       );
     }
 
