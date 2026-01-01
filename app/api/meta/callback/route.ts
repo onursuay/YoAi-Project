@@ -48,8 +48,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Exchange code for access token
-    const tokenUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token');
+    // Exchange code for USER ACCESS TOKEN
+    const tokenUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
     tokenUrl.searchParams.set('client_id', clientId);
     tokenUrl.searchParams.set('client_secret', clientSecret);
     tokenUrl.searchParams.set('redirect_uri', redirectUri);
@@ -88,10 +88,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get long-lived access token (optional but recommended)
+    // Get long-lived USER ACCESS TOKEN
     let longLivedToken = accessToken;
+    let finalExpiresIn = expiresIn;
     try {
-      const longLivedTokenUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token');
+      const longLivedTokenUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
       longLivedTokenUrl.searchParams.set('grant_type', 'fb_exchange_token');
       longLivedTokenUrl.searchParams.set('client_id', clientId);
       longLivedTokenUrl.searchParams.set('client_secret', clientSecret);
@@ -106,49 +107,41 @@ export async function GET(request: NextRequest) {
 
       if (longLivedResponse.ok) {
         const longLivedData = await longLivedResponse.json();
-        if (longLivedData.access_token) {
+        if (longLivedData.access_token && !longLivedData.error) {
           longLivedToken = longLivedData.access_token;
+          finalExpiresIn = longLivedData.expires_in || expiresIn;
         }
       }
     } catch (err) {
       console.warn('Failed to get long-lived token, using short-lived:', err);
     }
 
-    // Store access token securely in httpOnly cookie
+    // Store USER ACCESS TOKEN securely in httpOnly cookie (server-side only)
     cookieStore.set('meta_access_token', longLivedToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: expiresIn,
+      maxAge: finalExpiresIn,
       path: '/',
     });
 
-    // Verify connection by fetching user's ad accounts
+    // DO NOT auto-select account - user must select manually via /api/meta/accounts
+    // Just verify token works by checking user info
     try {
-      const accountsUrl = new URL('https://graph.facebook.com/v21.0/me/adaccounts');
-      accountsUrl.searchParams.set('access_token', longLivedToken);
-      accountsUrl.searchParams.set('fields', 'id,name,account_id');
+      const meUrl = new URL('https://graph.facebook.com/v19.0/me');
+      meUrl.searchParams.set('access_token', longLivedToken);
+      meUrl.searchParams.set('fields', 'id,name');
 
-      const accountsResponse = await fetch(accountsUrl.toString());
-      if (accountsResponse.ok) {
-        const accountsData = await accountsResponse.json();
-        if (accountsData.data && accountsData.data.length > 0) {
-          // Store the first account ID as default - ensure it has 'act_' prefix
-          let defaultAccount = accountsData.data[0].account_id || accountsData.data[0].id;
-          if (!defaultAccount.startsWith('act_')) {
-            defaultAccount = `act_${defaultAccount}`;
-          }
-          cookieStore.set('meta_account_id', defaultAccount, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: expiresIn,
-            path: '/',
-          });
-        }
+      const meResponse = await fetch(meUrl.toString());
+      if (!meResponse.ok) {
+        const errorText = await meResponse.text();
+        console.error('Token validation failed:', errorText);
+      } else {
+        const meData = await meResponse.json();
+        console.log('Meta OAuth successful, user ID:', meData.id);
       }
     } catch (err) {
-      console.warn('Failed to fetch ad accounts:', err);
+      console.warn('Failed to validate token:', err);
     }
 
     // Redirect to dashboard with success

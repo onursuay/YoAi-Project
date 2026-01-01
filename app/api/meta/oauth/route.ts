@@ -28,12 +28,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Required scopes for Meta Marketing API
+    // Required scopes for Meta Marketing API - MUST include ads_read and business_management
     const scopes = [
       'ads_read',
-      'ads_management',
       'business_management',
-      'read_insights',
     ].join(',');
 
     // Build Meta OAuth URL

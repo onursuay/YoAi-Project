@@ -3,11 +3,16 @@ import { cookies } from 'next/headers';
 
 async function getMetaCredentials() {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get('meta_access_token')?.value || process.env.META_SYSTEM_USER_TOKEN;
+  // ONLY use USER ACCESS TOKEN from cookie (never system token)
+  const accessToken = cookieStore.get('meta_access_token')?.value;
   const accountId = cookieStore.get('meta_account_id')?.value;
   
+  if (!accessToken) {
+    throw new Error('Meta access token not found. Please connect Meta account first.');
+  }
+  
   if (!accountId) {
-    throw new Error('Meta account ID not found');
+    throw new Error('Meta account ID not found. Please select an ad account first.');
   }
   
   const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
@@ -29,7 +34,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const days = parseInt(searchParams.get('days') || '30');
 
-    const insightsUrl = new URL(`https://graph.facebook.com/v21.0/${accountId}/insights`);
+    const insightsUrl = new URL(`https://graph.facebook.com/v19.0/${accountId}/insights`);
     insightsUrl.searchParams.set('access_token', accessToken);
     insightsUrl.searchParams.set('fields', 'date_start,date_stop,spend');
     insightsUrl.searchParams.set('time_range', JSON.stringify({ 
@@ -55,9 +60,13 @@ export async function GET(request: NextRequest) {
 
     const data = await response.json();
 
+    // Log actual Meta API response for debugging
+    console.log('Meta reports API response:', JSON.stringify(data, null, 2));
+
     if (data.error) {
+      console.error('Meta reports API error:', data.error);
       return NextResponse.json(
-        { error: data.error.message || 'Meta API error' },
+        { error: data.error.message || 'Meta API error', metaError: data.error },
         { status: 400 }
       );
     }
@@ -73,15 +82,21 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ dailyData });
   } catch (error: any) {
-    if (error.message === 'Meta account ID not found') {
+    if (error.message === 'Meta account ID not found. Please select an ad account first.') {
       return NextResponse.json(
-        { error: 'Meta account ID not found. Please connect a Meta account first.' },
+        { error: 'Meta account ID not found. Please select an ad account first.' },
         { status: 400 }
+      );
+    }
+    if (error.message === 'Meta access token not found. Please connect Meta account first.') {
+      return NextResponse.json(
+        { error: 'Meta access token not found. Please connect Meta account first.' },
+        { status: 401 }
       );
     }
     console.error('Meta reports API error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
   }

@@ -3,7 +3,8 @@ import { cookies } from 'next/headers';
 
 async function getMetaCredentials() {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get('meta_access_token')?.value || process.env.META_SYSTEM_USER_TOKEN;
+  // ONLY use USER ACCESS TOKEN from cookie (never system token)
+  const accessToken = cookieStore.get('meta_access_token')?.value;
   return { accessToken };
 }
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const accountsUrl = new URL('https://graph.facebook.com/v21.0/me/adaccounts');
+    const accountsUrl = new URL('https://graph.facebook.com/v19.0/me/adaccounts');
     accountsUrl.searchParams.set('access_token', accessToken);
     accountsUrl.searchParams.set('fields', 'id,name,account_id,account_status,currency,timezone_name');
 
@@ -46,13 +47,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const accounts = (data.data || []).map((account: any) => ({
-      id: account.account_id || account.id,
-      name: account.name || 'Unnamed Account',
-      status: account.account_status === 1 ? 'Active' : account.account_status === 2 ? 'Disabled' : account.account_status === 3 ? 'Unsettled' : account.account_status === 7 ? 'Pending Risk Review' : account.account_status === 9 ? 'In Grace Period' : account.account_status === 100 ? 'Pending Closure' : account.account_status === 101 ? 'Closed' : 'Unknown',
-      currency: account.currency || 'USD',
-      timezone: account.timezone_name || 'UTC',
-    }));
+    const accounts = (data.data || []).map((account: any) => {
+      let accountId = account.account_id || account.id;
+      // Ensure account_id has 'act_' prefix
+      if (accountId && !accountId.startsWith('act_')) {
+        accountId = `act_${accountId}`;
+      }
+      return {
+        id: accountId,
+        name: account.name || 'Unnamed Account',
+        status: account.account_status === 1 ? 'Active' : account.account_status === 2 ? 'Disabled' : account.account_status === 3 ? 'Unsettled' : account.account_status === 7 ? 'Pending Risk Review' : account.account_status === 9 ? 'In Grace Period' : account.account_status === 100 ? 'Pending Closure' : account.account_status === 101 ? 'Closed' : 'Unknown',
+        currency: account.currency || 'USD',
+        timezone: account.timezone_name || 'UTC',
+      };
+    });
 
     return NextResponse.json({ accounts });
   } catch (error) {
