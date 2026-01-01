@@ -26,9 +26,27 @@ export async function GET(request: NextRequest) {
           
           // Check if response has data or if error indicates invalid token
           if (accountsData.data) {
-            const accountId = accountsData.data.length > 0 
+            let accountId = accountsData.data.length > 0 
               ? (accountsData.data[0].account_id || accountsData.data[0].id)
               : null;
+            
+            // Ensure account_id has 'act_' prefix
+            if (accountId && !accountId.startsWith('act_')) {
+              accountId = `act_${accountId}`;
+            }
+            
+            // Store account_id in cookie if not already stored
+            const cookieStore = await cookies();
+            const storedAccountId = cookieStore.get('meta_account_id')?.value;
+            if (!storedAccountId && accountId) {
+              cookieStore.set('meta_account_id', accountId, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 5184000,
+                path: '/',
+              });
+            }
             
             return NextResponse.json({
               connected: true,

@@ -133,8 +133,11 @@ export async function GET(request: NextRequest) {
       if (accountsResponse.ok) {
         const accountsData = await accountsResponse.json();
         if (accountsData.data && accountsData.data.length > 0) {
-          // Store the first account ID as default
-          const defaultAccount = accountsData.data[0].account_id || accountsData.data[0].id;
+          // Store the first account ID as default - ensure it has 'act_' prefix
+          let defaultAccount = accountsData.data[0].account_id || accountsData.data[0].id;
+          if (!defaultAccount.startsWith('act_')) {
+            defaultAccount = `act_${defaultAccount}`;
+          }
           cookieStore.set('meta_account_id', defaultAccount, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
