@@ -18,7 +18,7 @@ const MetaAccounts: React.FC<MetaAccountsProps> = ({ selectedId, onSelect }) => 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { setMetaAccount } = useConnectionStore();
+  const { setMetaAccount, hydrate } = useConnectionStore();
 
   useEffect(() => {
     async function fetchAccounts() {
@@ -41,13 +41,24 @@ const MetaAccounts: React.FC<MetaAccountsProps> = ({ selectedId, onSelect }) => 
 
   const handleSelect = async (id: string) => {
     try {
+      // Save to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('YOAI_META_ACCOUNT_ID', id);
+      }
+      
+      // Update store
+      setMetaAccount(id);
+      
+      // Call API to save server-side
       const response = await fetch('/api/meta/account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accountId: id }),
       });
+      
       if (response.ok) {
-        setMetaAccount(id);
+        // Refresh connection state
+        await hydrate();
         onSelect(id);
       }
     } catch (err) {

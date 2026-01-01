@@ -1,5 +1,7 @@
+'use client';
 
 import React from 'react';
+import { useConnectionStore } from '@/lib/connectionStore';
 
 interface Props {
   selectedId: string;
@@ -7,6 +9,26 @@ interface Props {
 }
 
 const GoogleAccounts: React.FC<Props> = ({ selectedId, onSelect }) => {
+  const { setGoogleAccount, hydrate } = useConnectionStore();
+
+  const handleSelect = async (id: string) => {
+    try {
+      // Save to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('YOAI_GOOGLE_ACCOUNT_ID', id);
+      }
+      
+      // Update store
+      setGoogleAccount(id);
+      
+      // Refresh connection state
+      await hydrate();
+      onSelect(id);
+    } catch (err) {
+      console.error('Failed to select account:', err);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Google Ads Accounts</h1>
@@ -32,7 +54,7 @@ const GoogleAccounts: React.FC<Props> = ({ selectedId, onSelect }) => {
                     <span className="px-4 py-1.5 bg-[#0070f3]/10 text-[#0070f3] border border-[#0070f3]/30 rounded-lg text-xs font-bold">Active</span>
                   ) : (
                     <button 
-                      onClick={() => onSelect(acc.id)}
+                      onClick={() => handleSelect(acc.id)}
                       className="px-4 py-1.5 bg-[#1a1a1a] border border-[#333] rounded-lg text-xs font-bold"
                     >
                       Select
