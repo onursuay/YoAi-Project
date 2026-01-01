@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, createContext, useContext } from 'react';
+import React, { createContext, useContext } from 'react';
+import { useConnectionStore } from '@/lib/connectionStore';
 
 interface AppContextType {
   isMetaConnected: boolean;
@@ -16,22 +17,36 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [isMetaConnected, setIsMetaConnected] = useState(true);
-  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
-  const [selectedMetaAccount, setSelectedMetaAccount] = useState('act_382104922');
-  const [selectedGoogleAccount, setSelectedGoogleAccount] = useState('customer_901-223-1123');
+  const {
+    metaConnected,
+    googleConnected,
+    metaAccountId,
+    googleAccountId,
+    setMetaAccount,
+    setGoogleAccount,
+    disconnectMeta,
+    disconnectGoogle,
+  } = useConnectionStore();
 
   return (
     <AppContext.Provider
       value={{
-        isMetaConnected,
-        isGoogleConnected,
-        selectedMetaAccount,
-        selectedGoogleAccount,
-        setMetaConnected: setIsMetaConnected,
-        setGoogleConnected: setIsGoogleConnected,
-        setSelectedMetaAccount,
-        setSelectedGoogleAccount,
+        isMetaConnected: metaConnected,
+        isGoogleConnected: googleConnected,
+        selectedMetaAccount: metaAccountId || '',
+        selectedGoogleAccount: googleAccountId || '',
+        setMetaConnected: (value: boolean) => {
+          if (!value) {
+            disconnectMeta();
+          }
+        },
+        setGoogleConnected: (value: boolean) => {
+          if (!value) {
+            disconnectGoogle();
+          }
+        },
+        setSelectedMetaAccount: setMetaAccount,
+        setSelectedGoogleAccount: setGoogleAccount,
       }}
     >
       {children}

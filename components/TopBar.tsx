@@ -20,7 +20,7 @@ const TopBar: React.FC = () => {
         <div className="flex items-center space-x-3">
           <div className={`w-2.5 h-2.5 rounded-full ${isMetaConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
           <span className="text-xs font-medium text-gray-400">Meta {isMetaConnected ? 'Connected' : 'Disconnected'}</span>
-          {isMetaConnected && (
+          {isMetaConnected && selectedMetaAccount && (
             <div className="bg-[#1a1a1a] px-2 py-1 rounded text-[10px] font-mono text-gray-300 border border-[#222]">
               {selectedMetaAccount}
             </div>
@@ -32,7 +32,7 @@ const TopBar: React.FC = () => {
         <div className="flex items-center space-x-3">
           <div className={`w-2.5 h-2.5 rounded-full ${isGoogleConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
           <span className="text-xs font-medium text-gray-400">Google {isGoogleConnected ? 'Connected' : 'Disconnected'}</span>
-          {isGoogleConnected && (
+          {isGoogleConnected && selectedGoogleAccount && (
             <div className="bg-[#1a1a1a] px-2 py-1 rounded text-[10px] font-mono text-gray-300 border border-[#222]">
               {selectedGoogleAccount}
             </div>
@@ -61,7 +61,7 @@ const TopBar: React.FC = () => {
 
         {!isGoogleConnected ? (
           <button 
-            onClick={() => setGoogleConnected(true)}
+            onClick={() => { window.location.href = '/api/google/oauth'; }}
             className="flex items-center space-x-2 px-4 py-2 bg-[#0070f3] rounded-lg text-xs font-semibold hover:bg-[#0070f3]/90 transition-all shadow-[0_4px_10px_rgba(0,112,243,0.2)]"
           >
             {ICONS.Connect}

@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
     // Priority 2: Check OAuth token from cookies
     const cookieStore = await cookies();
     const accessToken = cookieStore.get('meta_access_token')?.value;
-    const accountId = cookieStore.get('meta_account_id')?.value;
+    const accountId = cookieStore.get('meta_ad_account_id')?.value || cookieStore.get('meta_account_id')?.value;
 
     if (!accessToken) {
       return NextResponse.json({
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
 
     // Verify OAuth token is still valid
     try {
-      const verifyUrl = new URL('https://graph.facebook.com/v21.0/me');
+      const verifyUrl = new URL('https://graph.facebook.com/v19.0/me');
       verifyUrl.searchParams.set('access_token', accessToken);
       verifyUrl.searchParams.set('fields', 'id');
 
@@ -118,6 +118,7 @@ export async function GET(request: NextRequest) {
         // Token is invalid, clear cookies
         cookieStore.delete('meta_access_token');
         cookieStore.delete('meta_account_id');
+        cookieStore.delete('meta_ad_account_id');
         
         return NextResponse.json({
           connected: false,
@@ -133,6 +134,7 @@ export async function GET(request: NextRequest) {
       console.error('OAuth token verification error:', error);
       cookieStore.delete('meta_access_token');
       cookieStore.delete('meta_account_id');
+      cookieStore.delete('meta_ad_account_id');
       
       return NextResponse.json({
         connected: false,

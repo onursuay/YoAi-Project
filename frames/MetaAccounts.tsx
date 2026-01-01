@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useConnectionStore } from '@/lib/connectionStore';
 
 interface MetaAccountsProps {
   selectedId: string;
@@ -17,6 +18,7 @@ const MetaAccounts: React.FC<MetaAccountsProps> = ({ selectedId, onSelect }) => 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { setMetaAccount } = useConnectionStore();
 
   useEffect(() => {
     async function fetchAccounts() {
@@ -45,6 +47,7 @@ const MetaAccounts: React.FC<MetaAccountsProps> = ({ selectedId, onSelect }) => 
         body: JSON.stringify({ accountId: id }),
       });
       if (response.ok) {
+        setMetaAccount(id);
         onSelect(id);
       }
     } catch (err) {
