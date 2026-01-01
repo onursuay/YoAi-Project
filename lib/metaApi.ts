@@ -8,42 +8,98 @@ function requireEnv(name: string): string {
 
 const ACCESS_TOKEN = requireEnv('META_SYSTEM_USER_TOKEN');
 
-async function metaApiCall(endpoint: string, params?: Record<string, string>): Promise<any> {
-  const url = new URL(`${META_API_BASE}${endpoint}`);
-  
-  url.searchParams.set('access_token', ACCESS_TOKEN);
-  
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.set(key, value);
-    });
+// Cache for rate limit protection: key = endpoint + accountId, value = { data, timestamp }
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 60 * 1000; // 60 seconds
+
+// Track in-flight requests to deduplicate concurrent calls
+const inFlightRequests = new Map<string, Promise<any>>();
+
+function getCacheKey(endpoint: string, accountId?: string): string {
+  return accountId ? `${endpoint}:${accountId}` : endpoint;
+}
+
+function isRateLimitError(error: any): boolean {
+  if (typeof error === 'string') {
+    return error.includes('rate limit') || error.includes('too many requests') || error.includes('API rate limit');
+  }
+  if (error?.error?.code === 4 || error?.error?.type === 'OAuthException') {
+    const message = error.error?.message?.toLowerCase() || '';
+    return message.includes('rate limit') || message.includes('too many requests');
+  }
+  return false;
+}
+
+async function metaApiCall(endpoint: string, params?: Record<string, string>, accountId?: string): Promise<any> {
+  const cacheKey = getCacheKey(endpoint, accountId);
+  const now = Date.now();
+
+  // Check cache first
+  const cached = cache.get(cacheKey);
+  if (cached && (now - cached.timestamp) < CACHE_TTL) {
+    return cached.data;
   }
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-    throw new Error(errorData.error?.message || 'Meta API request failed');
+  // Check if request is already in-flight
+  const inFlight = inFlightRequests.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
   }
 
-  const data = await response.json();
+  // Create new request
+  const requestPromise = (async () => {
+    try {
+      const url = new URL(`${META_API_BASE}${endpoint}`);
+      
+      url.searchParams.set('access_token', ACCESS_TOKEN);
+      
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          url.searchParams.set(key, value);
+        });
+      }
 
-  if (data.error) {
-    throw new Error(data.error.message || 'Meta API error');
-  }
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
 
-  return data;
+      const responseData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+
+      if (!response.ok || responseData.error) {
+        // Check if it's a rate limit error
+        if (isRateLimitError(responseData)) {
+          // Return cached data if available, even if expired
+          if (cached) {
+            return cached.data;
+          }
+          throw new Error(responseData.error?.message || 'Meta API rate limit exceeded');
+        }
+        throw new Error(responseData.error?.message || 'Meta API request failed');
+      }
+
+      // Store in cache
+      cache.set(cacheKey, { data: responseData, timestamp: now });
+
+      return responseData;
+    } finally {
+      // Remove from in-flight requests
+      inFlightRequests.delete(cacheKey);
+    }
+  })();
+
+  // Track in-flight request
+  inFlightRequests.set(cacheKey, requestPromise);
+
+  return requestPromise;
 }
 
 export async function getMetaAdAccounts() {
   const data = await metaApiCall('/me/adaccounts', {
     fields: 'id,name,account_id,account_status,currency,timezone_name',
-  });
+  }, undefined);
 
   return (data.data || []).map((account: any) => {
     let accountId = account.account_id || account.id;
@@ -73,7 +129,7 @@ export async function getMetaCampaigns(adAccountId: string) {
   const data = await metaApiCall(`/${formattedAccountId}/campaigns`, {
     fields: 'id,name,status,daily_budget,lifetime_budget',
     limit: '100',
-  });
+  }, formattedAccountId);
 
   // Fetch insights for each campaign
   const campaigns = await Promise.all(
@@ -85,7 +141,7 @@ export async function getMetaCampaigns(adAccountId: string) {
             since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
             until: new Date().toISOString().split('T')[0],
           }),
-        });
+        }, formattedAccountId);
 
         const insights = insightsData.data?.[0] || {};
         const spend = parseFloat(insights.spend || '0');
@@ -138,7 +194,7 @@ export async function getMetaAdSets(adAccountId: string) {
   const data = await metaApiCall(`/${formattedAccountId}/adsets`, {
     fields: 'id,name,status,daily_budget,lifetime_budget,targeting,start_time,end_time',
     limit: '100',
-  });
+  }, formattedAccountId);
 
   return (data.data || []).map((adset: any) => {
     const budget = adset.daily_budget 
@@ -182,7 +238,7 @@ export async function getMetaAds(adAccountId: string) {
   const data = await metaApiCall(`/${formattedAccountId}/ads`, {
     fields: 'id,name,status,creative{thumbnail_url,title,body}',
     limit: '100',
-  });
+  }, formattedAccountId);
 
   const ads = await Promise.all(
     (data.data || []).map(async (ad: any) => {
@@ -193,7 +249,7 @@ export async function getMetaAds(adAccountId: string) {
             since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
             until: new Date().toISOString().split('T')[0],
           }),
-        });
+        }, formattedAccountId);
 
         const insights = insightsData.data?.[0] || {};
         const spend = parseFloat(insights.spend || '0');
