@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { clearSelectedAdAccountId } from '@/lib/metaSession';
 import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
@@ -9,6 +10,7 @@ export async function POST(request: NextRequest) {
     cookieStore.delete('meta_access_token');
     cookieStore.delete('meta_account_id');
     cookieStore.delete('meta_oauth_state');
+    await clearSelectedAdAccountId();
 
     return NextResponse.json({
       success: true,

@@ -144,9 +144,9 @@ export async function GET(request: NextRequest) {
       console.warn('Failed to validate token:', err);
     }
 
-    // Redirect to dashboard with success
+    // Redirect to accounts page for account selection
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin}/dashboard?meta_connected=true`
+      `${process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin}/meta/accounts?meta_connected=true`
     );
   } catch (error) {
     console.error('Meta OAuth callback error:', error);

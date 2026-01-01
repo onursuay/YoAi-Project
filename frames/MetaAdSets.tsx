@@ -1,7 +1,40 @@
+'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+
+interface AdSet {
+  id: string;
+  name: string;
+  targeting: string;
+  budget: string;
+  schedule: string;
+}
 
 const MetaAdSets: React.FC = () => {
+  const [adsets, setAdsets] = useState<AdSet[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchAdSets() {
+      try {
+        const response = await fetch('/api/meta/adsets');
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to fetch ad sets');
+        }
+        const data = await response.json();
+        setAdsets(data.adsets || []);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load ad sets');
+        setAdsets([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAdSets();
+  }, []);
+
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Ad Sets</h1>
@@ -16,18 +49,34 @@ const MetaAdSets: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#1a1a1a]">
-            {[
-              { name: 'Lookalike 1% Purchase', target: 'LAL (Purchase)', budget: '₺450 / day' },
-              { name: 'Interests: Marketing', target: 'Digital Marketing', budget: '₺300 / day' },
-              { name: 'Broad - TR - 25-45', target: 'Turkey, 25-45', budget: '₺1.200 / day' }
-            ].map((s, i) => (
-              <tr key={i} className="hover:bg-[#1a1a1a]/30">
-                <td className="px-6 py-4 font-medium">{s.name}</td>
-                <td className="px-6 py-4 text-xs text-gray-500">{s.target}</td>
-                <td className="px-6 py-4 text-sm font-bold">{s.budget}</td>
-                <td className="px-6 py-4 text-xs text-gray-500">Ongoing</td>
+            {loading ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
+                  Loading ad sets...
+                </td>
               </tr>
-            ))}
+            ) : error ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-8 text-center text-red-400">
+                  {error}
+                </td>
+              </tr>
+            ) : adsets.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
+                  No ad sets found
+                </td>
+              </tr>
+            ) : (
+              adsets.map((s) => (
+                <tr key={s.id} className="hover:bg-[#1a1a1a]/30">
+                  <td className="px-6 py-4 font-medium">{s.name}</td>
+                  <td className="px-6 py-4 text-xs text-gray-500">{s.targeting}</td>
+                  <td className="px-6 py-4 text-sm font-bold">{s.budget}</td>
+                  <td className="px-6 py-4 text-xs text-gray-500">{s.schedule}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { setSelectedAdAccountId } from '@/lib/metaSession';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,33 +13,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cookieStore = await cookies();
-    
-    // Ensure account_id has 'act_' prefix
-    const formattedAccountId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
-    
-    // Get token expiration from existing cookie or set default
-    const existingToken = cookieStore.get('meta_access_token');
-    const maxAge = existingToken ? undefined : 5184000; // 60 days default
-
-    cookieStore.set('meta_account_id', formattedAccountId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: maxAge,
-      path: '/',
-    });
+    await setSelectedAdAccountId(accountId);
 
     return NextResponse.json({
       success: true,
-      accountId: formattedAccountId,
+      accountId: accountId.startsWith('act_') ? accountId : `act_${accountId}`,
     });
-  } catch (error) {
-    console.error('Meta account update error:', error);
+  } catch (error: any) {
+    console.error('Meta account selection error:', error);
     return NextResponse.json(
-      { error: 'Failed to update account ID' },
+      { error: error.message || 'Failed to select account' },
       { status: 500 }
     );
   }
 }
-
