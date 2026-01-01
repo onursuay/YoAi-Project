@@ -1,0 +1,8 @@
+{
+  "name": "YOAI Marketing Dashboard",
+  "description": "A high-performance AI-powered marketing SaaS dashboard with cross-channel insights for Meta, Google Ads, and SEO.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
