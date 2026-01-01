@@ -43,7 +43,7 @@ const TopBar: React.FC = () => {
       <div className="flex items-center space-x-3">
         {!isMetaConnected ? (
           <button 
-            onClick={() => setMetaConnected(true)}
+            onClick={() => { window.location.href = '/api/meta/oauth'; }}
             className="flex items-center space-x-2 px-4 py-2 bg-[#0070f3] rounded-lg text-xs font-semibold hover:bg-[#0070f3]/90 transition-all shadow-[0_4px_10px_rgba(0,112,243,0.2)]"
           >
             {ICONS.Connect}
