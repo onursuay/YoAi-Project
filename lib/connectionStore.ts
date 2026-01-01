@@ -28,12 +28,14 @@ class ConnectionStore {
 
   constructor() {
     // Load persisted account IDs from localStorage
+    // Note: connection state starts as false until hydrate() confirms with server
     if (typeof window !== 'undefined') {
       const metaAccountId = localStorage.getItem(META_ACCOUNT_KEY);
       const googleAccountId = localStorage.getItem(GOOGLE_ACCOUNT_KEY);
       
       this.state.metaAccountId = metaAccountId;
       this.state.googleAccountId = googleAccountId;
+      // Don't set connected to true here - wait for server confirmation
     }
   }
 
@@ -138,12 +140,7 @@ class ConnectionStore {
   }
 
   async disconnectMeta() {
-    try {
-      await fetch('/api/meta/disconnect', { method: 'POST' });
-    } catch (error) {
-      console.error('Failed to disconnect Meta:', error);
-    }
-    
+    // Update UI immediately (optimistic update)
     this.state.metaConnected = false;
     this.state.metaAccountId = null;
     
@@ -152,15 +149,17 @@ class ConnectionStore {
     }
     
     this.notify();
+    
+    // Then call API to clear server-side state
+    try {
+      await fetch('/api/meta/disconnect', { method: 'POST' });
+    } catch (error) {
+      console.error('Failed to disconnect Meta:', error);
+    }
   }
 
   async disconnectGoogle() {
-    try {
-      await fetch('/api/google/disconnect', { method: 'POST' }).catch(() => null);
-    } catch (error) {
-      console.error('Failed to disconnect Google:', error);
-    }
-    
+    // Update UI immediately (optimistic update)
     this.state.googleConnected = false;
     this.state.googleAccountId = null;
     
@@ -169,6 +168,13 @@ class ConnectionStore {
     }
     
     this.notify();
+    
+    // Then call API to clear server-side state
+    try {
+      await fetch('/api/google/disconnect', { method: 'POST' }).catch(() => null);
+    } catch (error) {
+      console.error('Failed to disconnect Google:', error);
+    }
   }
 }
 

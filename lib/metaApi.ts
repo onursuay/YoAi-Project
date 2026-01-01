@@ -6,7 +6,9 @@ function requireEnv(name: string): string {
   return v;
 }
 
-const ACCESS_TOKEN = requireEnv('META_SYSTEM_USER_TOKEN');
+function getAccessToken(): string {
+  return requireEnv('META_SYSTEM_USER_TOKEN');
+}
 
 // Cache for rate limit protection: key = endpoint + accountId, value = { data, timestamp }
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -51,7 +53,7 @@ async function metaApiCall(endpoint: string, params?: Record<string, string>, ac
     try {
       const url = new URL(`${META_API_BASE}${endpoint}`);
       
-      url.searchParams.set('access_token', ACCESS_TOKEN);
+      url.searchParams.set('access_token', getAccessToken());
       
       if (params) {
         Object.entries(params).forEach(([key, value]) => {

@@ -10,8 +10,10 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const { hydrate } = useConnectionStore();
 
   useEffect(() => {
+    // Only hydrate once on mount
     hydrate();
-  }, [hydrate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex min-h-screen bg-[#050505] text-white">
