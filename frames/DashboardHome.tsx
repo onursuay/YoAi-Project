@@ -1,7 +1,53 @@
+'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+
+interface DashboardData {
+  metaSpend: number;
+  totalResults: number;
+  impressions: number;
+  clicks: number;
+}
 
 const DashboardHome: React.FC = () => {
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchDashboard() {
+      try {
+        const adAccountId = localStorage.getItem('meta_ad_account_id');
+        const response = await fetch('/api/meta/dashboard', {
+          headers: adAccountId ? { 'x-ad-account-id': adAccountId } : {},
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setDashboardData(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchDashboard();
+  }, []);
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('tr-TR', {
+      style: 'currency',
+      currency: 'TRY',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat('tr-TR').format(value);
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex justify-between items-end">
@@ -17,14 +63,34 @@ const DashboardHome: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Meta Spend', value: '₺42.850', sub: '+12% from last week', trend: 'up' },
-          { label: 'Google Spend', value: '₺12.450', sub: '-3% from last week', trend: 'down' },
-          { label: 'Total Results', value: '3,842', sub: '+18% from last week', trend: 'up' },
-          { label: 'SEO Health Score', value: '84/100', sub: 'Excellent', trend: 'up' }
+          { 
+            label: 'Meta Spend', 
+            value: loading ? '...' : dashboardData ? formatCurrency(dashboardData.metaSpend) : '₺0', 
+            sub: '+12% from last week', 
+            trend: 'up' 
+          },
+          { 
+            label: 'Google Spend', 
+            value: '₺12.450', 
+            sub: '-3% from last week', 
+            trend: 'down' 
+          },
+          { 
+            label: 'Total Results', 
+            value: loading ? '...' : dashboardData ? formatNumber(dashboardData.totalResults) : '0', 
+            sub: '+18% from last week', 
+            trend: 'up' 
+          },
+          { 
+            label: 'SEO Health Score', 
+            value: '84/100', 
+            sub: 'Excellent', 
+            trend: 'up' 
+          }
         ].map((kpi, idx) => (
           <div key={idx} className="bg-[#111] border border-[#1a1a1a] p-6 rounded-2xl group hover:border-[#0070f3]/50 transition-all">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">{kpi.label}</p>
-            <h3 className="text-2xl font-bold mt-2">{kpi.value}</h3>
+            <h3 className={`text-2xl font-bold mt-2 ${loading ? 'animate-pulse' : ''}`}>{kpi.value}</h3>
             <p className={`text-xs mt-2 ${kpi.trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>{kpi.sub}</p>
           </div>
         ))}
