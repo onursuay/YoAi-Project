@@ -61,24 +61,33 @@ class ConnectionStore {
 
     try {
       const metaResponse = await fetch('/api/meta/status');
-      const metaData = await metaResponse.json();
       
-      // Get account ID from localStorage first, then from API response
-      const storedAccountId = typeof window !== 'undefined' ? localStorage.getItem(META_ACCOUNT_KEY) : null;
-      const metaAccountId = storedAccountId || metaData.accountId || null;
-      
-      // Connected only if API says connected AND account ID exists
-      this.state.metaConnected = metaData.connected === true && !!metaAccountId;
-      this.state.metaAccountId = metaAccountId;
-      
-      if (metaAccountId && typeof window !== 'undefined') {
-        localStorage.setItem(META_ACCOUNT_KEY, metaAccountId);
-      } else if (!metaAccountId && typeof window !== 'undefined') {
-        localStorage.removeItem(META_ACCOUNT_KEY);
+      if (!metaResponse.ok) {
+        this.state.metaConnected = false;
+        this.state.metaAccountId = null;
+      } else {
+        const metaData = await metaResponse.json();
+        
+        const storedAccountId = typeof window !== 'undefined' ? localStorage.getItem('YOAI_META_ACCOUNT_ID') : null;
+        const metaAccountId = storedAccountId || metaData.accountId || null;
+        
+        // Connected if API says connected
+        this.state.metaConnected = metaData.connected === true;
+        this.state.metaAccountId = metaAccountId;
+        
+        console.error('🟢 Meta connection status:', {
+          connected: this.state.metaConnected,
+          accountId: this.state.metaAccountId
+        });
+        
+        if (metaAccountId && typeof window !== 'undefined') {
+          localStorage.setItem('YOAI_META_ACCOUNT_ID', metaAccountId);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch Meta connection status:', error);
       this.state.metaConnected = false;
+      this.state.metaAccountId = null;
     } finally {
       this.state.loadingMeta = false;
       this.notify();
