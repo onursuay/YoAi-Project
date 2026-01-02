@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const dateEnd = today.toISOString().split('T')[0];
 
     const insightsUrl = new URL(`https://graph.facebook.com/v21.0/${adAccountId}/insights`);
-    insightsUrl.searchParams.set('access_token', accessToken);
+    insightsUrl.searchParams.set('access_token', accessToken as string);
     insightsUrl.searchParams.set('time_range', JSON.stringify({ since: dateStart, until: dateEnd }));
     insightsUrl.searchParams.set('fields', 'spend,cpc,actions,frequency');
     insightsUrl.searchParams.set('level', 'account');

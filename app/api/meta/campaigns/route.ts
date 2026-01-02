@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch campaigns with detailed metrics
     const campaignsUrl = new URL(`https://graph.facebook.com/v21.0/${adAccountId}/campaigns`);
-    campaignsUrl.searchParams.set('access_token', accessToken);
+    campaignsUrl.searchParams.set('access_token', accessToken as string);
     campaignsUrl.searchParams.set('fields', 'id,name,status,daily_budget,lifetime_budget,insights{spend,impressions,clicks,cpc,ctr,cpm,reach,frequency,actions,cost_per_action_type}');
     campaignsUrl.searchParams.set('limit', '100');
 
