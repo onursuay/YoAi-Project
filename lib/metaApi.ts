@@ -98,31 +98,129 @@ async function metaApiCall(endpoint: string, params?: Record<string, string>, ac
   return requestPromise;
 }
 
-export async function getMetaAdAccounts() {
-  const data = await metaApiCall('/me/adaccounts', {
-    fields: 'id,name,account_id,account_status,currency,timezone_name',
-  }, undefined);
+function formatAccountStatus(status: number): string {
+  switch (status) {
+    case 1: return 'Active';
+    case 2: return 'Disabled';
+    case 3: return 'Unsettled';
+    case 7: return 'Pending Risk Review';
+    case 9: return 'In Grace Period';
+    case 100: return 'Pending Closure';
+    case 101: return 'Closed';
+    default: return 'Unknown';
+  }
+}
 
-  return (data.data || []).map((account: any) => {
-    let accountId = account.account_id || account.id;
-    if (accountId && !accountId.startsWith('act_')) {
-      accountId = `act_${accountId}`;
+function formatAccount(account: any) {
+  let accountId = account.account_id || account.id;
+  if (accountId && !accountId.startsWith('act_')) {
+    accountId = `act_${accountId}`;
+  }
+  
+  return {
+    id: accountId,
+    name: account.name || 'Unnamed Account',
+    status: formatAccountStatus(account.account_status),
+    currency: account.currency || 'TRY',
+    timezone: account.timezone_name || 'UTC',
+  };
+}
+
+async function fetchWithPagination(endpoint: string, params: Record<string, string>): Promise<any[]> {
+  const allData: any[] = [];
+  let hasMore = true;
+  let after: string | null = null;
+  
+  while (hasMore) {
+    const paginatedParams: Record<string, string> = { ...params, limit: '100' };
+    if (after) {
+      paginatedParams.after = after;
     }
     
-    return {
-      id: accountId,
-      name: account.name || 'Unnamed Account',
-      status: account.account_status === 1 ? 'Active' : 
-              account.account_status === 2 ? 'Disabled' : 
-              account.account_status === 3 ? 'Unsettled' : 
-              account.account_status === 7 ? 'Pending Risk Review' : 
-              account.account_status === 9 ? 'In Grace Period' : 
-              account.account_status === 100 ? 'Pending Closure' : 
-              account.account_status === 101 ? 'Closed' : 'Unknown',
-      currency: account.currency || 'TRY',
-      timezone: account.timezone_name || 'UTC',
-    };
-  });
+    const data = await metaApiCall(endpoint, paginatedParams);
+    
+    if (data.data && Array.isArray(data.data)) {
+      allData.push(...data.data);
+    }
+    
+    // Check for next page
+    if (data.paging?.cursors?.after && data.data?.length > 0) {
+      after = data.paging.cursors.after;
+    } else {
+      hasMore = false;
+    }
+  }
+  
+  return allData;
+}
+
+export async function getMetaAdAccounts() {
+  const allAccounts: any[] = [];
+  
+  console.error('🔍 Fetching businesses...');
+  
+  // Step 1: Get all businesses
+  try {
+    const businesses = await fetchWithPagination('/me/businesses', {
+      fields: 'id,name',
+    });
+    
+    console.error('🔍 Found businesses:', businesses.length);
+    
+    // Step 2: Get ad accounts from each business
+    for (const business of businesses) {
+      try {
+        const businessAccounts = await fetchWithPagination(`/${business.id}/owned_ad_accounts`, {
+          fields: 'id,name,account_id,account_status,currency,timezone_name',
+        });
+        allAccounts.push(...businessAccounts);
+        console.error(`🔍 Business ${business.name}: ${businessAccounts.length} accounts`);
+      } catch (err) {
+        console.error(`Failed to fetch accounts for business ${business.id}:`, err);
+      }
+      
+      // Also get client ad accounts
+      try {
+        const clientAccounts = await fetchWithPagination(`/${business.id}/client_ad_accounts`, {
+          fields: 'id,name,account_id,account_status,currency,timezone_name',
+        });
+        allAccounts.push(...clientAccounts);
+        console.error(`🔍 Business ${business.name} clients: ${clientAccounts.length} accounts`);
+      } catch (err) {
+        // Client accounts might not be accessible, ignore errors
+      }
+    }
+  } catch (err) {
+    console.error('Failed to fetch businesses:', err);
+  }
+  
+  // Step 3: Also get user's direct ad accounts
+  console.error('🔍 Fetching direct ad accounts...');
+  try {
+    const directAccounts = await fetchWithPagination('/me/adaccounts', {
+      fields: 'id,name,account_id,account_status,currency,timezone_name',
+    });
+    allAccounts.push(...directAccounts);
+    console.error('🔍 Direct accounts:', directAccounts.length);
+  } catch (err) {
+    console.error('Failed to fetch direct accounts:', err);
+  }
+  
+  // Step 4: Remove duplicates by ID
+  const uniqueAccountsMap = new Map<string, any>();
+  for (const account of allAccounts) {
+    const id = account.account_id || account.id;
+    const formattedId = id?.startsWith('act_') ? id : `act_${id}`;
+    if (formattedId && !uniqueAccountsMap.has(formattedId)) {
+      uniqueAccountsMap.set(formattedId, account);
+    }
+  }
+  
+  const uniqueAccounts = Array.from(uniqueAccountsMap.values()).map(formatAccount);
+  
+  console.error('🔍 Total unique ad accounts:', uniqueAccounts.length);
+  
+  return uniqueAccounts;
 }
 
 export async function getMetaCampaigns(adAccountId: string) {
