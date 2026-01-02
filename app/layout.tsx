@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import { ReactNode } from 'react';
 import './globals.css';
+import { AdAccountProvider } from '@/lib/contexts/AdAccountContext';
 
 export const metadata: Metadata = {
   title: 'YOAI - Marketing Dashboard',
@@ -9,11 +11,15 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <AdAccountProvider>
+          {children}
+        </AdAccountProvider>
+      </body>
     </html>
   );
 }

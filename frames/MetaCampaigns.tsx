@@ -19,12 +19,8 @@ const MetaCampaigns: React.FC = () => {
   useEffect(() => {
     async function fetchCampaigns() {
       try {
-        const response = await fetch('/api/meta/campaigns');
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to fetch campaigns');
-        }
-        const data = await response.json();
+        const { fetchMetaCampaigns } = await import('@/lib/api/metaApi');
+        const data = await fetchMetaCampaigns();
         setCampaigns(data.campaigns || []);
       } catch (err: any) {
         setError(err.message || 'Failed to load campaigns');

@@ -18,12 +18,8 @@ const MetaAdSets: React.FC = () => {
   useEffect(() => {
     async function fetchAdSets() {
       try {
-        const response = await fetch('/api/meta/adsets');
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to fetch ad sets');
-        }
-        const data = await response.json();
+        const { fetchMetaAdSets } = await import('@/lib/api/metaApi');
+        const data = await fetchMetaAdSets();
         setAdsets(data.adsets || []);
       } catch (err: any) {
         setError(err.message || 'Failed to load ad sets');

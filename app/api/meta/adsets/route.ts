@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMetaAdSets } from '@/lib/metaApi';
-import { getSelectedAdAccountId } from '@/lib/metaSession';
+import { getMetaCredentials } from '@/lib/utils/metaApiHelper';
 
 export async function GET(request: NextRequest) {
   try {
-    const accountId = await getSelectedAdAccountId();
+    const credentials = await getMetaCredentials(request);
 
-    if (!accountId) {
+    if (credentials.error) {
       return NextResponse.json(
-        { error: 'No ad account selected. Please select an ad account first.' },
-        { status: 400 }
+        { error: credentials.error },
+        { status: credentials.status }
       );
     }
 
-    const adsets = await getMetaAdSets(accountId);
+    const adsets = await getMetaAdSets(credentials.adAccountId as string);
     return NextResponse.json({ adsets });
   } catch (error: any) {
     console.error('Meta adsets API error:', error);

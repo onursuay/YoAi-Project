@@ -140,19 +140,45 @@ class ConnectionStore {
   }
 
   async disconnectMeta() {
+    console.error('🔴 Disconnect clicked');
+    
+    // Check if token exists before clearing
+    const hasToken = typeof window !== 'undefined' 
+      ? document.cookie.includes('meta_access_token') || localStorage.getItem('meta_access_token')
+      : false;
+    
     // Update UI immediately (optimistic update)
     this.state.metaConnected = false;
     this.state.metaAccountId = null;
     
     if (typeof window !== 'undefined') {
+      // Clear all Meta-related localStorage items
       localStorage.removeItem(META_ACCOUNT_KEY);
+      localStorage.removeItem('meta_ad_account_id');
+      localStorage.removeItem('meta_access_token');
+      
+      console.error('🔴 Token cleared:', !hasToken);
     }
     
     this.notify();
     
     // Then call API to clear server-side state
     try {
-      await fetch('/api/meta/disconnect', { method: 'POST' });
+      const response = await fetch('/api/auth/meta/disconnect', { 
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      const sessionCleared = response.ok;
+      console.error('🔴 Session cleared:', sessionCleared);
+      
+      // Refresh the page to ensure all state is cleared
+      if (typeof window !== 'undefined' && sessionCleared) {
+        // Small delay to ensure UI updates
+        setTimeout(() => {
+          window.location.reload();
+        }, 100);
+      }
     } catch (error) {
       console.error('Failed to disconnect Meta:', error);
     }
