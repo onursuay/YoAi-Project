@@ -17,10 +17,29 @@ interface InsightsData {
   roas: number | null
 }
 
+interface Campaign {
+  id: string
+  name: string
+  status: string
+  statusLabel: string
+  statusColor: string
+  budget: number
+  spent: number
+  impressions: number
+  clicks: number
+  ctr: number
+  cpc: number
+  purchases: number
+  roas: number | null
+}
+
 export default function MetaPage() {
   const [activeTab, setActiveTab] = useState('kampanyalar')
   const [insights, setInsights] = useState<InsightsData | null>(null)
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isCampaignsLoading, setIsCampaignsLoading] = useState(false)
+  const [campaignsError, setCampaignsError] = useState<string | null>(null)
   const [adAccountId, setAdAccountId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -32,7 +51,10 @@ export default function MetaPage() {
           const statusData = await statusResponse.json()
           if (statusData.connected && statusData.adAccountId) {
             setAdAccountId(statusData.adAccountId)
-            await fetchInsights(statusData.adAccountId)
+            await Promise.all([
+              fetchInsights(statusData.adAccountId),
+              fetchCampaigns()
+            ])
           } else {
             setIsLoading(false)
           }
@@ -97,6 +119,27 @@ export default function MetaPage() {
     }
   }
 
+  const fetchCampaigns = async () => {
+    try {
+      setIsCampaignsLoading(true)
+      setCampaignsError(null)
+      const response = await fetch('/api/meta/campaigns')
+      
+      if (response.ok) {
+        const data = await response.json()
+        setCampaigns(data.campaigns || [])
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        setCampaignsError(errorData.error || 'Kampanyalar yüklenemedi')
+      }
+    } catch (error) {
+      console.error('Failed to fetch campaigns:', error)
+      setCampaignsError('Kampanyalar yüklenirken bir hata oluştu')
+    } finally {
+      setIsCampaignsLoading(false)
+    }
+  }
+
   const tabs = [
     { id: 'kampanyalar', label: 'Kampanyalar' },
     { id: 'reklam-setleri', label: 'Reklam Setleri' },
@@ -115,104 +158,24 @@ export default function MetaPage() {
     { key: 'roas', label: 'ROAS' },
   ]
 
-  const data = [
-    {
-      status: (
-        <label className="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" className="sr-only peer" defaultChecked />
-          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-        </label>
-      ),
-      name: 'Yaz Koleksiyonu 2024',
-      budget: '₺15,000',
-      spent: '₺12,450',
-      impressions: '245,890',
-      clicks: '3,245',
-      ctr: '1.32%',
-      cpc: '₺3.84',
-      roas: '4.2x',
-    },
-    {
-      status: (
-        <label className="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" className="sr-only peer" defaultChecked />
-          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-        </label>
-      ),
-      name: 'Yeni Ürün Lansmanı',
-      budget: '₺25,000',
-      spent: '₺18,920',
-      impressions: '389,120',
-      clicks: '5,678',
-      ctr: '1.46%',
-      cpc: '₺3.33',
-      roas: '5.8x',
-    },
-    {
-      status: (
-        <label className="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" className="sr-only peer" />
-          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-        </label>
-      ),
-      name: 'Marka Bilinirliği Q4',
-      budget: '₺10,000',
-      spent: '₺8,234',
-      impressions: '156,789',
-      clicks: '2,123',
-      ctr: '1.35%',
-      cpc: '₺3.88',
-      roas: '3.1x',
-    },
-    {
-      status: (
-        <label className="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" className="sr-only peer" defaultChecked />
-          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-        </label>
-      ),
-      name: 'Retargeting Kampanyası',
-      budget: '₺20,000',
-      spent: '₺15,678',
-      impressions: '298,456',
-      clicks: '4,567',
-      ctr: '1.53%',
-      cpc: '₺3.43',
-      roas: '6.2x',
-    },
-    {
-      status: (
-        <label className="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" className="sr-only peer" defaultChecked />
-          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-        </label>
-      ),
-      name: 'Stok Tükeniyor',
-      budget: '₺12,000',
-      spent: '₺9,876',
-      impressions: '198,234',
-      clicks: '3,456',
-      ctr: '1.74%',
-      cpc: '₺2.86',
-      roas: '4.9x',
-    },
-    {
-      status: (
-        <label className="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" className="sr-only peer" />
-          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-        </label>
-      ),
-      name: 'Yılbaşı Özel',
-      budget: '₺30,000',
-      spent: '₺22,345',
-      impressions: '456,789',
-      clicks: '6,789',
-      ctr: '1.49%',
-      cpc: '₺3.29',
-      roas: '5.5x',
-    },
-  ]
+  // Format campaign data for DataTable
+  const formatCampaignData = (campaign: Campaign) => ({
+    status: (
+      <span className={`px-2 py-1 text-xs font-medium rounded-full ${campaign.statusColor}`}>
+        {campaign.statusLabel}
+      </span>
+    ),
+    name: campaign.name,
+    budget: `₺${campaign.budget.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    spent: `₺${campaign.spent.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    impressions: campaign.impressions.toLocaleString('tr-TR'),
+    clicks: campaign.clicks.toLocaleString('tr-TR'),
+    ctr: `${campaign.ctr.toFixed(2)}%`,
+    cpc: `₺${campaign.cpc.toFixed(2)}`,
+    roas: campaign.roas ? `${campaign.roas.toFixed(1)}x` : '-',
+  })
+
+  const tableData = campaigns.map(formatCampaignData)
 
   return (
     <>
@@ -251,7 +214,27 @@ export default function MetaPage() {
             <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
             <Toolbar />
             <div className="p-6">
-              <DataTable columns={columns} data={data} />
+              {isCampaignsLoading ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-600">Kampanyalar yükleniyor...</p>
+                </div>
+              ) : campaignsError ? (
+                <div className="text-center py-12">
+                  <p className="text-red-600">{campaignsError}</p>
+                  <button
+                    onClick={fetchCampaigns}
+                    className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    Tekrar Dene
+                  </button>
+                </div>
+              ) : tableData.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-600">Henüz kampanya bulunmuyor.</p>
+                </div>
+              ) : (
+                <DataTable columns={columns} data={tableData} />
+              )}
             </div>
           </div>
         </div>
