@@ -61,7 +61,7 @@ export default function MetaConnectWizard() {
   }
 
   const handleConnect = () => {
-    window.location.href = '/api/meta/oauth/start'
+    window.location.href = '/api/meta/connect'
   }
 
   const loadAdAccounts = async () => {

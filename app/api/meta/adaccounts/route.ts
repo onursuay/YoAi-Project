@@ -22,6 +22,18 @@ export async function GET() {
     )
   }
 
+  // Check token expiration
+  const expiresAtCookie = cookieStore.get('meta_token_expires_at')
+  if (expiresAtCookie) {
+    const expiresAt = parseInt(expiresAtCookie.value, 10)
+    if (Date.now() >= expiresAt) {
+      return NextResponse.json(
+        { error: 'Token expired' },
+        { status: 401 }
+      )
+    }
+  }
+
   try {
     const response = await metaFetch(
       '/me/adaccounts',
