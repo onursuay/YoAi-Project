@@ -54,13 +54,13 @@ export async function GET(request: Request) {
     // Build insights field with date_preset
     const insightsField = `insights.date_preset(${datePreset}){spend,impressions,clicks,ctr,cpc,actions,action_values}`
     
-    // Fetch campaigns with insights
+    // Fetch ads with insights
     const response = await metaFetch(
-      `/${accountId}/campaigns`,
+      `/${accountId}/ads`,
       decryptedToken,
       {
         params: {
-          fields: `id,name,status,effective_status,daily_budget,lifetime_budget,${insightsField}`,
+          fields: `id,name,status,effective_status,adset_id,creative,${insightsField}`,
           limit: '100',
         },
       }
@@ -78,16 +78,16 @@ export async function GET(request: Request) {
       }
 
       return NextResponse.json(
-        { error: errorData.error?.message || 'Failed to fetch campaigns' },
+        { error: errorData.error?.message || 'Failed to fetch ads' },
         { status: response.status }
       )
     }
 
     const data = await response.json()
     
-    // Process campaigns data
-    const campaigns = (data.data || []).map((campaign: any) => {
-      const insights = campaign.insights?.data?.[0] || campaign.insights || {}
+    // Process ads data
+    const ads = (data.data || []).map((ad: any) => {
+      const insights = ad.insights?.data?.[0] || ad.insights || {}
       
       // Parse actions for purchases
       const actions = insights.actions || []
@@ -107,25 +107,18 @@ export async function GET(request: Request) {
         }
       }
 
-      // Determine budget (daily_budget or lifetime_budget)
-      const budget = campaign.daily_budget 
-        ? parseFloat(campaign.daily_budget) 
-        : campaign.lifetime_budget 
-          ? parseFloat(campaign.lifetime_budget) 
-          : 0
-
       // Format status
-      const effectiveStatus = campaign.effective_status || campaign.status || 'UNKNOWN'
+      const effectiveStatus = ad.effective_status || ad.status || 'UNKNOWN'
       const statusLabel = getStatusLabel(effectiveStatus)
       const statusColor = getStatusColor(effectiveStatus)
 
       return {
-        id: campaign.id,
-        name: campaign.name || 'Unnamed Campaign',
+        id: ad.id,
+        name: ad.name || 'Unnamed Ad',
         status: effectiveStatus,
         statusLabel,
         statusColor,
-        budget,
+        adsetId: ad.adset_id || '',
         spent: parseFloat(insights.spend || '0'),
         impressions: parseInt(insights.impressions || '0', 10),
         clicks: parseInt(insights.clicks || '0', 10),
@@ -136,11 +129,11 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json({ campaigns })
+    return NextResponse.json({ ads })
   } catch (error) {
-    console.error('Campaigns fetch error:', error)
+    console.error('Ads fetch error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch campaigns' },
+      { error: 'Failed to fetch ads' },
       { status: 500 }
     )
   }
