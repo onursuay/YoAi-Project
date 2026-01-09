@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { metaGraphFetch } from '@/lib/metaGraph'
 
+export const revalidate = 60 // Cache for 60 seconds
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const datePreset = searchParams.get('date_preset') || 'lifetime'
