@@ -40,7 +40,7 @@ export const navItems: NavItem[] = [
         label: 'Google',
         href: '/dashboard/reklam/google',
         icon: LayoutDashboard,
-        iconPath: '/platform-icons/google.svg',
+        iconPath: '/platform-icons/google-ads.svg',
       },
       {
         id: 'tiktok',
