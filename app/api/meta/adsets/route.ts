@@ -4,7 +4,7 @@ import { metaGraphFetch } from '@/lib/metaGraph'
 
 // CACHE: 60 saniye boyunca aynı veriyi dön
 export const dynamic = 'force-dynamic'
-export const revalidate = 60
+export const revalidate = 300
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
