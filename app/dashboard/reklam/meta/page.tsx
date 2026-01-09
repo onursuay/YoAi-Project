@@ -2,51 +2,18 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Topbar from '@/components/Topbar'
-import StatCard from '@/components/StatCard'
 import Tabs from '@/components/Tabs'
 import Toolbar from '@/components/Toolbar'
-import DataTable from '@/components/DataTable'
+import ToggleSwitch from '@/components/ToggleSwitch'
+import CircularProgress from '@/components/CircularProgress'
+import MiniChart from '@/components/MiniChart'
+import CampaignCreateModal from '@/components/CampaignCreateModal'
 
 interface Campaign {
   id: string
   name: string
   status: string
-  statusLabel: string
-  statusColor: string
   budget: number
-  spent: number
-  impressions: number
-  clicks: number
-  ctr: number
-  cpc: number
-  purchases: number
-  roas: number | null
-}
-
-interface AdSet {
-  id: string
-  name: string
-  status: string
-  statusLabel: string
-  statusColor: string
-  campaignId: string
-  budget: number
-  spent: number
-  impressions: number
-  clicks: number
-  ctr: number
-  cpc: number
-  purchases: number
-  roas: number | null
-}
-
-interface Ad {
-  id: string
-  name: string
-  status: string
-  statusLabel: string
-  statusColor: string
-  adsetId: string
   spent: number
   impressions: number
   clicks: number
@@ -69,20 +36,14 @@ interface InsightsData {
 export default function MetaPage() {
   const [activeTab, setActiveTab] = useState('kampanyalar')
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [adsets, setAdsets] = useState<AdSet[]>([])
-  const [ads, setAds] = useState<Ad[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [insightsLoading, setInsightsLoading] = useState(true)
   const [insights, setInsights] = useState<InsightsData | null>(null)
-  const [adAccountId, setAdAccountId] = useState<string | null>(null)
   const [adAccountName, setAdAccountName] = useState<string>('')
   const [dateRange, setDateRange] = useState({ preset: 'last_30d', start: '', end: '' })
   const [showInactive, setShowInactive] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [campaignsMap, setCampaignsMap] = useState<Record<string, string>>({})
-  const [editingBudget, setEditingBudget] = useState<Record<string, { editing: boolean; value: number }>>({})
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
-  // Convert date preset to Meta API format
   const getMetaDatePreset = (preset: string): string => {
     const presetMap: Record<string, string> = {
       'today': 'today',
@@ -91,279 +52,98 @@ export default function MetaPage() {
       'last_30d': 'last_30d',
       'this_month': 'this_month',
       'last_month': 'last_month',
-      'custom': 'last_30d', // For custom, we'll use last_30d as fallback
+      'custom': 'last_30d',
     }
     return presetMap[preset] || 'last_30d'
   }
 
   useEffect(() => {
-    const checkStatus = async () => {
+    const init = async () => {
       try {
         const statusResponse = await fetch('/api/meta/status')
         if (statusResponse.ok) {
           const statusData = await statusResponse.json()
           if (statusData.connected) {
             setAdAccountName(statusData.adAccountName || '')
-            // Get selected ad account
-            const selectedResponse = await fetch('/api/meta/selected-adaccount')
-            if (selectedResponse.ok) {
-              const selectedData = await selectedResponse.json()
-              if (selectedData.adAccountId) {
-                setAdAccountId(selectedData.adAccountId)
-                await Promise.all([
-                  fetchData('kampanyalar'),
-                  fetchInsights(),
-                ])
-              } else {
-                setIsLoading(false)
-                setInsightsLoading(false)
-              }
-            } else {
-              setIsLoading(false)
-              setInsightsLoading(false)
-            }
-          } else {
-            setIsLoading(false)
-            setInsightsLoading(false)
+            await fetchCampaigns()
+            await fetchInsights()
           }
-        } else {
-          setIsLoading(false)
-          setInsightsLoading(false)
         }
       } catch (error) {
-        console.error('Status check failed:', error)
+        console.error('Init failed:', error)
+      } finally {
         setIsLoading(false)
-        setInsightsLoading(false)
       }
     }
-
-    checkStatus()
+    init()
   }, [])
 
   useEffect(() => {
-    if (adAccountId) {
-      fetchData(activeTab)
+    fetchCampaigns()
       fetchInsights()
-    }
-  }, [activeTab, dateRange, adAccountId])
+  }, [dateRange])
 
   const fetchInsights = async () => {
-    if (!adAccountId) return
-
     try {
-      setInsightsLoading(true)
       const datePreset = getMetaDatePreset(dateRange.preset)
       const response = await fetch(`/api/meta/insights?datePreset=${datePreset}`)
-      
       if (response.ok) {
         const data = await response.json()
         setInsights(data)
-      } else {
-        // If error, set null to show placeholder
-        setInsights(null)
       }
     } catch (error) {
       console.error('Failed to fetch insights:', error)
-      setInsights(null)
-    } finally {
-      setInsightsLoading(false)
     }
   }
 
-  const fetchData = async (tab: string) => {
-    if (!adAccountId) return
-
+  const fetchCampaigns = async () => {
     setIsLoading(true)
-    const datePreset = getMetaDatePreset(dateRange.preset)
-
     try {
-      if (tab === 'kampanyalar') {
+      const datePreset = getMetaDatePreset(dateRange.preset)
         const response = await fetch(`/api/meta/campaigns?date_preset=${datePreset}`)
         if (response.ok) {
           const data = await response.json()
           setCampaigns(data.data || [])
-          // Build campaigns map for adsets
-          const map: Record<string, string> = {}
-          data.data?.forEach((c: Campaign) => {
-            map[c.id] = c.name
-          })
-          setCampaignsMap(map)
-        }
-      } else if (tab === 'reklam-setleri') {
-        const response = await fetch(`/api/meta/adsets?date_preset=${datePreset}`)
-        if (response.ok) {
-          const data = await response.json()
-          setAdsets(data.data || [])
-        }
-      } else if (tab === 'reklamlar') {
-        const response = await fetch(`/api/meta/ads?date_preset=${datePreset}`)
-        if (response.ok) {
-          const data = await response.json()
-          setAds(data.data || [])
-        }
       }
     } catch (error) {
-      console.error(`Failed to fetch ${tab}:`, error)
+      console.error('Failed to fetch campaigns:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleStatusToggle = async (objectId: string, currentStatus: string) => {
+  const handleStatusToggle = async (campaignId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE'
-    
     try {
       const response = await fetch('/api/meta/status', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          objectId,
-          status: newStatus,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ objectId: campaignId, status: newStatus }),
       })
-
       if (response.ok) {
-        // Refresh the current tab data
-        await fetchData(activeTab)
-      } else {
-        const error = await response.json()
-        console.error('Failed to update status:', error)
-        alert('Durum güncellenemedi. Lütfen tekrar deneyin.')
+        await fetchCampaigns()
       }
     } catch (error) {
-      console.error('Status toggle error:', error)
-      alert('Bir hata oluştu. Lütfen tekrar deneyin.')
-    }
-  }
-
-  const handleBudgetUpdate = async (adsetId: string, newBudget: number) => {
-    try {
-      const response = await fetch('/api/meta/adset-budget', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          adsetId,
-          dailyBudget: newBudget,
-        }),
-      })
-
-      if (response.ok) {
-        // Refresh adsets data
-        await fetchData('reklam-setleri')
-      } else {
-        const error = await response.json()
-        console.error('Failed to update budget:', error)
-        alert('Bütçe güncellenemedi. Lütfen tekrar deneyin.')
-      }
-    } catch (error) {
-      console.error('Budget update error:', error)
-      alert('Bir hata oluştu. Lütfen tekrar deneyin.')
+      console.error('Toggle error:', error)
     }
   }
 
   const handleDateChange = (startDate: string, endDate: string, preset?: string) => {
-    setDateRange({
-      preset: preset || 'custom',
-      start: startDate,
-      end: endDate,
-    })
+    setDateRange({ preset: preset || 'custom', start: startDate, end: endDate })
   }
 
-  // Filter data based on showInactive and searchQuery
   const filteredCampaigns = useMemo(() => {
     let filtered = campaigns
-
     if (!showInactive) {
       filtered = filtered.filter(c => c.status === 'ACTIVE')
     }
-
     if (searchQuery) {
       filtered = filtered.filter(c => 
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.id.toLowerCase().includes(searchQuery.toLowerCase())
+        c.name.toLowerCase().includes(searchQuery.toLowerCase())
       )
     }
-
     return filtered
   }, [campaigns, showInactive, searchQuery])
-
-  const filteredAdsets = useMemo(() => {
-    let filtered = adsets
-
-    if (!showInactive) {
-      filtered = filtered.filter(a => a.status === 'ACTIVE')
-    }
-
-    if (searchQuery) {
-      filtered = filtered.filter(a => 
-        a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        a.id.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    }
-
-    return filtered
-  }, [adsets, showInactive, searchQuery])
-
-  const filteredAds = useMemo(() => {
-    let filtered = ads
-
-    if (!showInactive) {
-      filtered = filtered.filter(a => a.status === 'ACTIVE')
-    }
-
-    if (searchQuery) {
-      filtered = filtered.filter(a => 
-        a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        a.id.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    }
-
-    return filtered
-  }, [ads, showInactive, searchQuery])
-
-  // Use insights data for KPI cards if available
-  const stats = useMemo(() => {
-    if (insights) {
-      return {
-        spend: insights.spendTRY,
-        purchases: insights.purchases,
-        roas: insights.roas,
-      }
-    }
-    
-    // Fallback to calculated stats from table data
-    let items: (Campaign | AdSet | Ad)[] = []
-    
-    if (activeTab === 'kampanyalar') {
-      items = filteredCampaigns
-    } else if (activeTab === 'reklam-setleri') {
-      items = filteredAdsets
-    } else if (activeTab === 'reklamlar') {
-      items = filteredAds
-    }
-
-    const totalSpend = items.reduce((sum, item) => sum + item.spent, 0)
-    const totalPurchases = items.reduce((sum, item) => sum + item.purchases, 0)
-    
-    let roas: number | null = null
-    const itemsWithRoas = items.filter(item => item.roas !== null && item.roas !== undefined)
-    if (itemsWithRoas.length > 0 && totalSpend > 0) {
-      const totalRoasValue = itemsWithRoas.reduce((sum, item) => {
-        return sum + (item.roas || 0) * item.spent
-      }, 0)
-      roas = totalRoasValue / totalSpend
-    }
-
-    return {
-      spend: totalSpend,
-      purchases: totalPurchases,
-      roas,
-    }
-  }, [insights, activeTab, filteredCampaigns, filteredAdsets, filteredAds])
 
   const tabs = [
     { id: 'kampanyalar', label: 'Kampanyalar' },
@@ -371,267 +151,76 @@ export default function MetaPage() {
     { id: 'reklamlar', label: 'Reklamlar' },
   ]
 
-  const campaignColumns = [
-    { key: 'status', label: 'Durum' },
-    { key: 'name', label: 'Kampanya Adı' },
-    { key: 'budget', label: 'Bütçe' },
-    { key: 'spent', label: 'Harcanan' },
-    { key: 'impressions', label: 'Gösterimler' },
-    { key: 'clicks', label: 'Tıklamalar' },
-    { key: 'ctr', label: 'CTR' },
-    { key: 'cpc', label: 'CPC' },
-    { key: 'roas', label: 'ROAS' },
-  ]
-
-  const adsetColumns = [
-    { key: 'status', label: 'Durum' },
-    { key: 'name', label: 'Reklam Seti Adı' },
-    { key: 'campaign', label: 'Kampanya' },
-    { key: 'budget', label: 'Bütçe' },
-    { key: 'spent', label: 'Harcanan' },
-    { key: 'impressions', label: 'Gösterimler' },
-    { key: 'clicks', label: 'Tıklamalar' },
-    { key: 'ctr', label: 'CTR' },
-    { key: 'cpc', label: 'CPC' },
-    { key: 'roas', label: 'ROAS' },
-  ]
-
-  const adColumns = [
-    { key: 'status', label: 'Durum' },
-    { key: 'name', label: 'Reklam Adı' },
-    { key: 'adset', label: 'Reklam Seti' },
-    { key: 'spent', label: 'Harcanan' },
-    { key: 'impressions', label: 'Gösterimler' },
-    { key: 'clicks', label: 'Tıklamalar' },
-    { key: 'ctr', label: 'CTR' },
-    { key: 'cpc', label: 'CPC' },
-    { key: 'roas', label: 'ROAS' },
-  ]
-
-  const formatCampaignData = (campaign: Campaign) => ({
-    _id: campaign.id,
-    _status: campaign.status,
-      status: (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${campaign.statusColor}`}>
-        {campaign.statusLabel}
-      </span>
-    ),
-    name: campaign.name,
-    budget: `₺${campaign.budget.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    spent: `₺${campaign.spent.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    impressions: campaign.impressions.toLocaleString('tr-TR'),
-    clicks: campaign.clicks.toLocaleString('tr-TR'),
-    ctr: `${campaign.ctr.toFixed(2)}%`,
-    cpc: `₺${campaign.cpc.toFixed(2)}`,
-    roas: campaign.roas ? `${campaign.roas.toFixed(1)}x` : '-',
-  })
-
-  const formatAdsetData = (adset: AdSet) => ({
-    _id: adset.id,
-    _status: adset.status,
-    _budget: adset.budget,
-      status: (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${adset.statusColor}`}>
-        {adset.statusLabel}
-      </span>
-    ),
-    name: adset.name,
-    campaign: campaignsMap[adset.campaignId] || '-',
-    budget: `₺${adset.budget.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    spent: `₺${adset.spent.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    impressions: adset.impressions.toLocaleString('tr-TR'),
-    clicks: adset.clicks.toLocaleString('tr-TR'),
-    ctr: `${adset.ctr.toFixed(2)}%`,
-    cpc: `₺${adset.cpc.toFixed(2)}`,
-    roas: adset.roas ? `${adset.roas.toFixed(1)}x` : '-',
-  })
-
-  const formatAdData = (ad: Ad) => ({
-    _id: ad.id,
-    _status: ad.status,
-      status: (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full ${ad.statusColor}`}>
-        {ad.statusLabel}
-      </span>
-    ),
-    name: ad.name,
-    adset: ad.adsetId ? `Ad Set ${ad.adsetId.slice(-8)}` : '-',
-    spent: `₺${ad.spent.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    impressions: ad.impressions.toLocaleString('tr-TR'),
-    clicks: ad.clicks.toLocaleString('tr-TR'),
-    ctr: `${ad.ctr.toFixed(2)}%`,
-    cpc: `₺${ad.cpc.toFixed(2)}`,
-    roas: ad.roas ? `${ad.roas.toFixed(1)}x` : '-',
-  })
-
-  const getTableData = () => {
-    if (activeTab === 'kampanyalar') {
-      return filteredCampaigns.map(formatCampaignData)
-    } else if (activeTab === 'reklam-setleri') {
-      return filteredAdsets.map(formatAdsetData)
-    } else {
-      return filteredAds.map(formatAdData)
-    }
-  }
-
-  const getTableActions = () => {
-    return (row: any, index: number) => {
-      const objectId = row._id
-      const currentStatus = row._status
-      const isEditing = editingBudget[objectId]?.editing || false
-      const budgetValue = editingBudget[objectId]?.value ?? row._budget ?? 0
-
-      if (activeTab === 'reklam-setleri') {
-        // AdSet: Status toggle + Budget edit
-        return (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleStatusToggle(objectId, currentStatus)}
-              className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-              title={currentStatus === 'ACTIVE' ? 'Duraklat' : 'Aktifleştir'}
-            >
-              {currentStatus === 'ACTIVE' ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              )}
-            </button>
-            {isEditing ? (
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  value={budgetValue}
-                  onChange={(e) => {
-                    setEditingBudget({
-                      ...editingBudget,
-                      [objectId]: { editing: true, value: parseFloat(e.target.value) || 0 },
-                    })
-                  }}
-                  className="w-20 px-2 py-1 text-xs border border-gray-300 rounded"
-                  step="0.01"
-                  min="0"
-                />
-                <button
-                  onClick={async () => {
-                    await handleBudgetUpdate(objectId, budgetValue)
-                    setEditingBudget({
-                      ...editingBudget,
-                      [objectId]: { editing: false, value: budgetValue },
-                    })
-                  }}
-                  className="p-1 text-green-600 hover:text-green-700"
-                  title="Kaydet"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => {
-                    setEditingBudget({
-                      ...editingBudget,
-                      [objectId]: { editing: false, value: row._budget || 0 },
-                    })
-                  }}
-                  className="p-1 text-red-600 hover:text-red-700"
-                  title="İptal"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  setEditingBudget({
-                    ...editingBudget,
-                    [objectId]: { editing: true, value: row._budget || 0 },
-                  })
-                }}
-                className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                title="Bütçe Düzenle"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-              </button>
-            )}
-          </div>
-        )
-      } else {
-        // Campaign/Ad: Status toggle only
-        return (
-          <button
-            onClick={() => handleStatusToggle(objectId, currentStatus)}
-            className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-            title={currentStatus === 'ACTIVE' ? 'Duraklat' : 'Aktifleştir'}
-          >
-            {currentStatus === 'ACTIVE' ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            )}
-          </button>
-        )
-      }
-    }
-  }
-
-  const getColumns = () => {
-    if (activeTab === 'kampanyalar') {
-      return campaignColumns
-    } else if (activeTab === 'reklam-setleri') {
-      return adsetColumns
-    } else {
-      return adColumns
-    }
-  }
+  // Mock chart data
+  const generateMockData = () => Array.from({ length: 10 }, () => Math.random() * 100 + 50)
 
   return (
     <>
       <Topbar
         title="Reklam Yöneticisi"
-        description="Meta reklam kampanyalarınızı yönetin"
+        description="İşletmeniz için yeni bir reklam kampanyası oluşturun."
         actionButton={{
           label: 'Kampanya Oluştur',
-          onClick: () => {},
+          onClick: () => setShowCreateModal(true),
         }}
         adAccountName={adAccountName}
       />
       <div className="flex-1 overflow-y-auto bg-gray-50">
         <div className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <StatCard
-              title="Harcanan Tutar"
-              value={insightsLoading || isLoading ? '...' : insights ? `₺${insights.spendTRY.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₺0'}
-              change={0}
-              trend="up"
-            />
-            <StatCard
-              title="Alışveriş Dönüşümü"
-              value={insightsLoading || isLoading ? '...' : insights ? insights.purchases.toLocaleString('tr-TR') : '0'}
-              change={0}
-              trend="up"
-            />
-            <StatCard
-              title="ROAS"
-              value={insightsLoading || isLoading ? '...' : insights && insights.roas > 0 ? `${insights.roas.toFixed(1)}x` : '0x'}
-              change={0}
-              trend="up"
-            />
+          {/* KPI Cards with Mini Charts */}
+          <div className="grid grid-cols-5 gap-4">
+            <div className="bg-white rounded-lg p-4 border border-gray-200">
+              <div className="text-xs text-gray-500 mb-1">Harcanan tutar</div>
+              <div className="text-sm text-gray-400 mb-2">26/Ara - 01/Oca</div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-red-500 text-xs">↓ %14,7</span>
+                <span className="text-2xl font-bold">₺{insights?.spendTRY.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) || '0'}</span>
+              </div>
+              <MiniChart data={generateMockData()} color="red" />
+            </div>
+
+            <div className="bg-white rounded-lg p-4 border border-gray-200">
+              <div className="text-xs text-gray-500 mb-1">Tıklamalar</div>
+              <div className="text-sm text-gray-400 mb-2">26/Ara - 01/Oca</div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-red-500 text-xs">↓ %27,6</span>
+                <span className="text-2xl font-bold">{insights?.clicks.toLocaleString('tr-TR') || '0'}</span>
+              </div>
+              <MiniChart data={generateMockData()} color="red" />
+            </div>
+
+            <div className="bg-white rounded-lg p-4 border border-gray-200">
+              <div className="text-xs text-gray-500 mb-1">Dönüşüm Değeri</div>
+              <div className="text-sm text-gray-400 mb-2">26/Ara - 01/Oca</div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-red-500 text-xs">↓ %15,9</span>
+                <span className="text-2xl font-bold">{insights?.purchases || '0'}</span>
+              </div>
+              <MiniChart data={generateMockData()} color="red" />
+            </div>
+
+            <div className="bg-white rounded-lg p-4 border border-gray-200">
+              <div className="text-xs text-gray-500 mb-1">Dön. Değeri / Maliyet</div>
+              <div className="text-sm text-gray-400 mb-2">26/Ara - 01/Oca</div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-green-500 text-xs">↑ %22,9</span>
+                <span className="text-2xl font-bold">₺{insights?.roas.toFixed(0) || '0'}</span>
+              </div>
+              <MiniChart data={generateMockData()} color="green" />
+            </div>
+
+            <div className="bg-white rounded-lg p-4 border border-gray-200">
+              <div className="text-xs text-gray-500 mb-1">TBM (Tıklama Başına Maliyet)</div>
+              <div className="text-sm text-gray-400 mb-2">26/Ara - 01/Oca</div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-green-500 text-xs">↑ %16,1</span>
+                <span className="text-2xl font-bold">₺{insights?.cpcTRY.toFixed(0) || '0'}</span>
+              </div>
+              <MiniChart data={generateMockData()} color="green" />
+            </div>
           </div>
 
+          {/* Table */}
           <div className="bg-white rounded-xl border border-gray-200">
             <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
             <Toolbar
@@ -641,22 +230,104 @@ export default function MetaPage() {
               showInactive={showInactive}
               searchQuery={searchQuery}
             />
-            <div className="p-6">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-y border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Yayın</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Durum</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Opt. Puanı</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Başlangıç Tarihi</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kampanya</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bütçe</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Harcanan tutar</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Gösterimler</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Tıklamalar</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">CTR</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">CPC</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">ROAS</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">İşlemler</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
               {isLoading ? (
-                <div className="text-center py-12">
-                  <p className="text-gray-600">Yükleniyor...</p>
-                </div>
-              ) : getTableData().length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-gray-600">Henüz veri bulunmuyor.</p>
-                </div>
-              ) : (
-                <DataTable columns={getColumns()} data={getTableData()} actions={getTableActions()} />
-              )}
+                    <tr>
+                      <td colSpan={13} className="px-4 py-12 text-center text-gray-500">
+                        Yükleniyor...
+                      </td>
+                    </tr>
+                  ) : filteredCampaigns.length === 0 ? (
+                    <tr>
+                      <td colSpan={13} className="px-4 py-12 text-center text-gray-500">
+                        Henüz veri bulunmuyor.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredCampaigns.map((campaign) => (
+                      <tr key={campaign.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-4">
+                          <ToggleSwitch
+                            enabled={campaign.status === 'ACTIVE'}
+                            onChange={() => handleStatusToggle(campaign.id, campaign.status)}
+                          />
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
+                            campaign.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {campaign.status === 'ACTIVE' ? 'Aktif' : 'Pasif'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <CircularProgress percentage={Math.floor(Math.random() * 30 + 70)} />
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-900">
+                          {new Date().toLocaleDateString('tr-TR')}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-900">{campaign.name}</td>
+                        <td className="px-4 py-4 text-sm text-right text-gray-900">
+                          ₺{campaign.budget.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-right text-gray-900">
+                          ₺{campaign.spent.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-right text-gray-900">
+                          {campaign.impressions.toLocaleString('tr-TR')}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-right text-gray-900">
+                          {campaign.clicks.toLocaleString('tr-TR')}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-right text-gray-900">
+                          {campaign.ctr.toFixed(2)}%
+                        </td>
+                        <td className="px-4 py-4 text-sm text-right text-gray-900">
+                          ₺{campaign.cpc.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-right text-gray-900">
+                          {campaign.roas ? `${campaign.roas.toFixed(1)}x` : '-'}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <button className="p-1.5 text-gray-400 hover:text-gray-600">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       </div>
+
+      <CampaignCreateModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={fetchCampaigns}
+      />
     </>
   )
 }
