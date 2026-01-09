@@ -32,113 +32,118 @@ export async function GET(request: Request) {
       ? selectedAdAccountId.value
       : `act_${selectedAdAccountId.value.replace('act_', '')}`
 
-    const params: Record<string, string> = {
+    // Step 1: Fetch adsets
+    const adsetParams: Record<string, string> = {
       fields: 'id,name,status,effective_status,daily_budget,campaign_id',
-      limit: '25',
+      limit: '50',
     }
 
     if (after) {
-      params.after = after
+      adsetParams.after = after
     }
 
-    const response = await metaGraphFetch(`/${accountId}/adsets`, accessToken.value, { params })
+    const adsetResponse = await metaGraphFetch(`/${accountId}/adsets`, accessToken.value, { params: adsetParams })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
+    if (!adsetResponse.ok) {
+      const errorData = await adsetResponse.json().catch(() => ({}))
       return NextResponse.json(
-        { error: 'meta_api_error', details: errorData.error || { message: `HTTP ${response.status}` } },
+        { error: 'meta_api_error', details: errorData.error || { message: `HTTP ${adsetResponse.status}` } },
         { status: 502 }
       )
     }
 
-    const data = await response.json()
-    const adsets = data.data || []
+    const adsetData = await adsetResponse.json()
+    const adsets = adsetData.data || []
 
     if (adsets.length === 0) {
       return NextResponse.json({ data: [], paging: {} })
     }
 
-    // Fetch insights for each adset
-    const enrichedAdsets = await Promise.all(
-      adsets.map(async (adset: any) => {
-        const effectiveStatus = adset.effective_status || adset.status || 'UNKNOWN'
-        const statusLabel = getStatusLabel(effectiveStatus)
-        const statusColor = getStatusColor(effectiveStatus)
-        const budget = adset.daily_budget ? parseFloat(adset.daily_budget) / 100 : 0
+    // Step 2: Fetch ALL adset insights in ONE request
+    const insightsParams: Record<string, string> = {
+      level: 'adset',
+      fields: 'adset_id,spend,impressions,clicks,ctr,cpc,actions,action_values,purchase_roas',
+      date_preset: datePreset,
+      limit: '50',
+    }
 
-        let spend = 0, impressions = 0, clicks = 0, ctr = 0, cpc = 0, purchases = 0, roas = 0
-
-        try {
-          const insightsParams: Record<string, string> = {
-            fields: 'spend,impressions,clicks,ctr,cpc,actions,action_values,purchase_roas',
-            date_preset: datePreset,
-          }
-
-          const insightsResponse = await metaGraphFetch(
-            `/${adset.id}/insights`,
-            accessToken.value,
-            { params: insightsParams }
-          )
-
-          if (insightsResponse.ok) {
-            const insightsData = await insightsResponse.json()
-            const insights = insightsData.data || []
-
-            if (insights.length > 0) {
-              const insight = insights[0]
-
-              spend = insight.spend ? parseFloat(insight.spend) : 0
-              impressions = insight.impressions ? parseInt(insight.impressions, 10) : 0
-              clicks = insight.clicks ? parseInt(insight.clicks, 10) : 0
-              ctr = insight.ctr ? parseFloat(insight.ctr) : 0
-              cpc = insight.cpc ? parseFloat(insight.cpc) : 0
-
-              if (insight.actions) {
-                const purchaseAction = insight.actions.find(
-                  (a: any) => a.action_type === 'purchase' || a.action_type === 'omni_purchase'
-                )
-                if (purchaseAction) {
-                  purchases = parseInt(purchaseAction.value || '0', 10)
-                }
-              }
-
-              if (insight.purchase_roas) {
-                roas = parseFloat(insight.purchase_roas)
-              } else if (insight.action_values && spend > 0) {
-                const purchaseValue = insight.action_values.find(
-                  (av: any) => av.action_type === 'purchase' || av.action_type === 'omni_purchase'
-                )
-                if (purchaseValue) {
-                  const value = parseFloat(purchaseValue.value || '0')
-                  roas = value / spend
-                }
-              }
-            }
-          }
-        } catch (insightError) {
-          console.error(`Failed to fetch insights for adset ${adset.id}:`, insightError)
-        }
-
-        return {
-          id: adset.id,
-          name: adset.name || 'Unnamed Ad Set',
-          status: effectiveStatus,
-          statusLabel,
-          statusColor,
-          campaignId: adset.campaign_id || '',
-          budget,
-          spent: spend,
-          impressions,
-          clicks,
-          ctr,
-          cpc,
-          purchases,
-          roas: roas > 0 ? roas : null,
-        }
-      })
+    const insightsResponse = await metaGraphFetch(
+      `/${accountId}/insights`,
+      accessToken.value,
+      { params: insightsParams }
     )
 
-    const nextCursor = data.paging?.cursors?.after || null
+    // Create insights map
+    const insightsMap = new Map<string, any>()
+    
+    if (insightsResponse.ok) {
+      const insightsData = await insightsResponse.json()
+      const insights = insightsData.data || []
+      
+      insights.forEach((insight: any) => {
+        if (insight.adset_id) {
+          insightsMap.set(insight.adset_id, insight)
+        }
+      })
+    }
+
+    // Step 3: Merge adsets with insights
+    const enrichedAdsets = adsets.map((adset: any) => {
+      const insight = insightsMap.get(adset.id)
+      
+      const effectiveStatus = adset.effective_status || adset.status || 'UNKNOWN'
+      const statusLabel = getStatusLabel(effectiveStatus)
+      const statusColor = getStatusColor(effectiveStatus)
+      const budget = adset.daily_budget ? parseFloat(adset.daily_budget) / 100 : 0
+
+      const spend = insight?.spend ? parseFloat(insight.spend) : 0
+      const impressions = insight?.impressions ? parseInt(insight.impressions, 10) : 0
+      const clicks = insight?.clicks ? parseInt(insight.clicks, 10) : 0
+      const ctr = insight?.ctr ? parseFloat(insight.ctr) : 0
+      const cpc = insight?.cpc ? parseFloat(insight.cpc) : 0
+
+      let purchases = 0
+      if (insight?.actions) {
+        const purchaseAction = insight.actions.find(
+          (a: any) => a.action_type === 'purchase' || a.action_type === 'omni_purchase'
+        )
+        if (purchaseAction) {
+          purchases = parseInt(purchaseAction.value || '0', 10)
+        }
+      }
+
+      let roas = 0
+      if (insight?.purchase_roas) {
+        roas = parseFloat(insight.purchase_roas)
+      } else if (insight?.action_values && spend > 0) {
+        const purchaseValue = insight.action_values.find(
+          (av: any) => av.action_type === 'purchase' || av.action_type === 'omni_purchase'
+        )
+        if (purchaseValue) {
+          const value = parseFloat(purchaseValue.value || '0')
+          roas = value / spend
+        }
+      }
+
+      return {
+        id: adset.id,
+        name: adset.name || 'Unnamed Ad Set',
+        status: effectiveStatus,
+        statusLabel,
+        statusColor,
+        campaignId: adset.campaign_id || '',
+        budget,
+        spent: spend,
+        impressions,
+        clicks,
+        ctr,
+        cpc,
+        purchases,
+        roas: roas > 0 ? roas : null,
+      }
+    })
+
+    const nextCursor = adsetData.paging?.cursors?.after || null
 
     return NextResponse.json({
       data: enrichedAdsets,
