@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { navItems } from '@/lib/nav'
 import { Bell, ChevronDown } from 'lucide-react'
@@ -68,11 +67,11 @@ export default function SidebarNav() {
                           }`}
                         />
                         {child.iconPath ? (
-                          <Image
+                          <img
                             src={child.iconPath}
-                            alt={`${child.label} icon`}
-                            width={18}
-                            height={18}
+                            alt=""
+                            width="18"
+                            height="18"
                             className="shrink-0"
                           />
                         ) : (
