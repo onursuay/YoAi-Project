@@ -16,6 +16,7 @@ export interface NavItem {
   label: string
   href?: string
   icon: React.ComponentType<{ className?: string }>
+  iconPath?: string
   badge?: string
   disabled?: boolean
   children?: NavItem[]
@@ -32,18 +33,21 @@ export const navItems: NavItem[] = [
         label: 'Meta',
         href: '/dashboard/reklam/meta',
         icon: LayoutDashboard,
+        iconPath: '/platform-icons/meta.svg',
       },
       {
         id: 'google',
         label: 'Google',
         href: '/dashboard/reklam/google',
         icon: LayoutDashboard,
+        iconPath: '/platform-icons/google-ads.svg',
       },
       {
         id: 'tiktok',
         label: 'TikTok',
         href: '#',
         icon: LayoutDashboard,
+        iconPath: '/platform-icons/tiktok.svg',
         disabled: true,
       },
     ],

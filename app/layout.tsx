@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Iyzads Dashboard',
+  title: 'YoAI Dashboard',
   description: 'Reklam ve pazarlama yönetim platformu',
 }
 

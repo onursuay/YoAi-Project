@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { navItems } from '@/lib/nav'
 import { Bell, ChevronDown } from 'lucide-react'
@@ -24,7 +25,7 @@ export default function SidebarNav() {
   return (
     <div className="w-64 bg-white border-r border-gray-200 h-screen flex flex-col">
       <div className="p-6 border-b border-gray-200">
-        <div className="text-2xl font-bold text-gray-900">iyzads</div>
+        <div className="text-2xl font-bold text-gray-900">YoAI</div>
       </div>
 
       <nav className="flex-1 overflow-y-auto p-4 space-y-1">
@@ -53,7 +54,7 @@ export default function SidebarNav() {
                       <Link
                         key={child.id}
                         href={child.href || '#'}
-                        className={`flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors ${
+                        className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
                           isActive(child.href)
                             ? 'bg-primary/10 text-primary font-medium'
                             : child.disabled
@@ -66,6 +67,17 @@ export default function SidebarNav() {
                             isActive(child.href) ? 'bg-primary' : ''
                           }`}
                         />
+                        {child.iconPath ? (
+                          <Image
+                            src={child.iconPath}
+                            alt={`${child.label} icon`}
+                            width={18}
+                            height={18}
+                            className="shrink-0"
+                          />
+                        ) : (
+                          <child.icon className="w-5 h-5 shrink-0" />
+                        )}
                         <span>{child.label}</span>
                         {child.disabled && (
                           <span className="ml-auto text-xs text-gray-400">
