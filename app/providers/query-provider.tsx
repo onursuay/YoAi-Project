@@ -10,7 +10,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 5 * 60 * 1000, // 5 dakika boyunca data fresh
-            cacheTime: 10 * 60 * 1000, // 10 dakika cache'te tut
+            gcTime: 10 * 60 * 1000, // 10 dakika cache'te tut (eski adı: cacheTime)
             refetchOnWindowFocus: false, // Pencere focus'ta yenileme yapma
             retry: 1, // Hata olursa 1 kere tekrar dene
           },
