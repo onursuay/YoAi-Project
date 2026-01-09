@@ -23,6 +23,35 @@ interface Campaign {
   roas: number | null
 }
 
+interface AdSet {
+  id: string
+  name: string
+  status: string
+  campaignId: string
+  budget: number
+  spent: number
+  impressions: number
+  clicks: number
+  ctr: number
+  cpc: number
+  purchases: number
+  roas: number | null
+}
+
+interface Ad {
+  id: string
+  name: string
+  status: string
+  adsetId: string
+  spent: number
+  impressions: number
+  clicks: number
+  ctr: number
+  cpc: number
+  purchases: number
+  roas: number | null
+}
+
 interface InsightsData {
   spendTRY: number
   purchases: number
@@ -36,6 +65,8 @@ interface InsightsData {
 export default function MetaPage() {
   const [activeTab, setActiveTab] = useState('kampanyalar')
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [adsets, setAdsets] = useState<AdSet[]>([])
+  const [ads, setAds] = useState<Ad[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [insights, setInsights] = useState<InsightsData | null>(null)
   const [adAccountName, setAdAccountName] = useState<string>('')
@@ -65,7 +96,7 @@ export default function MetaPage() {
           const statusData = await statusResponse.json()
           if (statusData.connected) {
             setAdAccountName(statusData.adAccountName || '')
-            await fetchCampaigns()
+            await fetchData(activeTab)
             await fetchInsights()
           }
         }
@@ -79,9 +110,9 @@ export default function MetaPage() {
   }, [])
 
   useEffect(() => {
-    fetchCampaigns()
+      fetchData(activeTab)
       fetchInsights()
-  }, [dateRange])
+  }, [dateRange, activeTab])
 
   const fetchInsights = async () => {
     try {
@@ -96,32 +127,47 @@ export default function MetaPage() {
     }
   }
 
-  const fetchCampaigns = async () => {
+  const fetchData = async (tab: string) => {
     setIsLoading(true)
     try {
       const datePreset = getMetaDatePreset(dateRange.preset)
+      
+      if (tab === 'kampanyalar') {
         const response = await fetch(`/api/meta/campaigns?date_preset=${datePreset}`)
         if (response.ok) {
           const data = await response.json()
           setCampaigns(data.data || [])
+        }
+      } else if (tab === 'reklam-setleri') {
+        const response = await fetch(`/api/meta/adsets?date_preset=${datePreset}`)
+        if (response.ok) {
+          const data = await response.json()
+          setAdsets(data.data || [])
+        }
+      } else if (tab === 'reklamlar') {
+        const response = await fetch(`/api/meta/ads?date_preset=${datePreset}`)
+        if (response.ok) {
+          const data = await response.json()
+          setAds(data.data || [])
+        }
       }
     } catch (error) {
-      console.error('Failed to fetch campaigns:', error)
+      console.error('Failed to fetch data:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleStatusToggle = async (campaignId: string, currentStatus: string) => {
+  const handleStatusToggle = async (objectId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE'
     try {
       const response = await fetch('/api/meta/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ objectId: campaignId, status: newStatus }),
+        body: JSON.stringify({ objectId, status: newStatus }),
       })
       if (response.ok) {
-        await fetchCampaigns()
+        await fetchData(activeTab)
       }
     } catch (error) {
       console.error('Toggle error:', error)
@@ -145,14 +191,47 @@ export default function MetaPage() {
     return filtered
   }, [campaigns, showInactive, searchQuery])
 
+  const filteredAdsets = useMemo(() => {
+    let filtered = adsets
+    if (!showInactive) {
+      filtered = filtered.filter(a => a.status === 'ACTIVE')
+    }
+    if (searchQuery) {
+      filtered = filtered.filter(a => 
+        a.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    }
+    return filtered
+  }, [adsets, showInactive, searchQuery])
+
+  const filteredAds = useMemo(() => {
+    let filtered = ads
+    if (!showInactive) {
+      filtered = filtered.filter(a => a.status === 'ACTIVE')
+    }
+    if (searchQuery) {
+      filtered = filtered.filter(a => 
+        a.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    }
+    return filtered
+  }, [ads, showInactive, searchQuery])
+
+  const getCurrentData = () => {
+    if (activeTab === 'kampanyalar') return filteredCampaigns
+    if (activeTab === 'reklam-setleri') return filteredAdsets
+    return filteredAds
+  }
+
   const tabs = [
     { id: 'kampanyalar', label: 'Kampanyalar' },
     { id: 'reklam-setleri', label: 'Reklam Setleri' },
     { id: 'reklamlar', label: 'Reklamlar' },
   ]
 
-  // Mock chart data
   const generateMockData = () => Array.from({ length: 10 }, () => Math.random() * 100 + 50)
+
+  const currentData = getCurrentData()
 
   return (
     <>
@@ -238,7 +317,9 @@ export default function MetaPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Durum</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Opt. Puanı</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Başlangıç Tarihi</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kampanya</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      {activeTab === 'kampanyalar' ? 'Kampanya' : activeTab === 'reklam-setleri' ? 'Reklam Seti' : 'Reklam'}
+                    </th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Bütçe</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Harcanan tutar</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Gösterimler</th>
@@ -256,26 +337,26 @@ export default function MetaPage() {
                         Yükleniyor...
                       </td>
                     </tr>
-                  ) : filteredCampaigns.length === 0 ? (
+                  ) : currentData.length === 0 ? (
                     <tr>
                       <td colSpan={13} className="px-4 py-12 text-center text-gray-500">
                         Henüz veri bulunmuyor.
                       </td>
                     </tr>
                   ) : (
-                    filteredCampaigns.map((campaign) => (
-                      <tr key={campaign.id} className="hover:bg-gray-50">
+                    currentData.map((item: any) => (
+                      <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-4 py-4">
                           <ToggleSwitch
-                            enabled={campaign.status === 'ACTIVE'}
-                            onChange={() => handleStatusToggle(campaign.id, campaign.status)}
+                            enabled={item.status === 'ACTIVE'}
+                            onChange={() => handleStatusToggle(item.id, item.status)}
                           />
                         </td>
                         <td className="px-4 py-4">
                           <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
-                            campaign.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            item.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                           }`}>
-                            {campaign.status === 'ACTIVE' ? 'Aktif' : 'Pasif'}
+                            {item.status === 'ACTIVE' ? 'Aktif' : 'Pasif'}
                           </span>
                         </td>
                         <td className="px-4 py-4">
@@ -284,27 +365,27 @@ export default function MetaPage() {
                         <td className="px-4 py-4 text-sm text-gray-900">
                           {new Date().toLocaleDateString('tr-TR')}
                         </td>
-                        <td className="px-4 py-4 text-sm text-gray-900">{campaign.name}</td>
+                        <td className="px-4 py-4 text-sm text-gray-900">{item.name}</td>
                         <td className="px-4 py-4 text-sm text-right text-gray-900">
-                          ₺{campaign.budget.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                          {item.budget ? `₺${item.budget.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}` : '-'}
                         </td>
                         <td className="px-4 py-4 text-sm text-right text-gray-900">
-                          ₺{campaign.spent.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                          ₺{item.spent.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="px-4 py-4 text-sm text-right text-gray-900">
-                          {campaign.impressions.toLocaleString('tr-TR')}
+                          {item.impressions.toLocaleString('tr-TR')}
                         </td>
                         <td className="px-4 py-4 text-sm text-right text-gray-900">
-                          {campaign.clicks.toLocaleString('tr-TR')}
+                          {item.clicks.toLocaleString('tr-TR')}
                         </td>
                         <td className="px-4 py-4 text-sm text-right text-gray-900">
-                          {campaign.ctr.toFixed(2)}%
+                          {item.ctr.toFixed(2)}%
                         </td>
                         <td className="px-4 py-4 text-sm text-right text-gray-900">
-                          ₺{campaign.cpc.toFixed(2)}
+                          ₺{item.cpc.toFixed(2)}
                         </td>
                         <td className="px-4 py-4 text-sm text-right text-gray-900">
-                          {campaign.roas ? `${campaign.roas.toFixed(1)}x` : '-'}
+                          {item.roas ? `${item.roas.toFixed(1)}x` : '-'}
                         </td>
                         <td className="px-4 py-4 text-center">
                           <button className="p-1.5 text-gray-400 hover:text-gray-600">
@@ -326,7 +407,7 @@ export default function MetaPage() {
       <CampaignCreateModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onSuccess={fetchCampaigns}
+        onSuccess={() => fetchData(activeTab)}
       />
     </>
   )
