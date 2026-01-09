@@ -14,6 +14,7 @@ interface AdAccount {
 interface StatusResponse {
   connected: boolean
   adAccountId?: string
+  adAccountName?: string
 }
 
 export default function MetaConnectWizard() {
@@ -31,37 +32,46 @@ export default function MetaConnectWizard() {
   const checkStatus = async () => {
     try {
       setStep('checking')
+      setError(null)
       const response = await fetch('/api/meta/status')
       
       if (!response.ok) {
-        if (response.status === 400) {
-          setStep('config-error')
-          return
-        }
-        throw new Error('Status check failed')
+        // If status endpoint returns error, user is not connected
+        setStep('init')
+        return
       }
 
       const data: StatusResponse = await response.json()
       
       if (data.connected) {
+        // If connected and has selected account, show connected state
         if (data.adAccountId) {
           setCurrentAdAccountId(data.adAccountId)
+          // Try to load accounts to show account info
+          try {
+            await loadAdAccounts()
+          } catch (err) {
+            // If accounts can't be loaded, still show connected with account ID
+            console.warn('Failed to load accounts:', err)
+          }
           setStep('connected')
         } else {
-          setStep('selecting')
+          // Connected but no account selected, show selection
           await loadAdAccounts()
         }
       } else {
+        // Not connected
         setStep('init')
       }
     } catch (err) {
+      // Network or other errors - show error state
       setError('Durum kontrolü başarısız')
       setStep('error')
     }
   }
 
   const handleConnect = () => {
-    window.location.href = '/api/meta/connect'
+    window.location.href = '/api/meta/login'
   }
 
   const loadAdAccounts = async () => {
@@ -71,28 +81,27 @@ export default function MetaConnectWizard() {
       const response = await fetch('/api/meta/adaccounts')
       
       if (!response.ok) {
-        if (response.status === 400) {
-          setStep('config-error')
-          return
-        }
         if (response.status === 401) {
+          // Not authorized - go back to init
           setStep('init')
           return
         }
-        throw new Error('Hesaplar yüklenemedi')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Hesaplar yüklenemedi')
       }
 
       const data = await response.json()
-      setAdAccounts(data.accounts || [])
+      const accounts = data.data || []
+      setAdAccounts(accounts)
       
-      if (data.accounts && data.accounts.length > 0) {
+      if (accounts.length > 0) {
         setStep('selecting')
       } else {
         setError('Reklam hesabı bulunamadı')
         setStep('error')
       }
     } catch (err) {
-      setError('Hesaplar yüklenirken hata oluştu')
+      setError(err instanceof Error ? err.message : 'Hesaplar yüklenirken hata oluştu')
       setStep('error')
     } finally {
       setIsLoading(false)
@@ -108,12 +117,20 @@ export default function MetaConnectWizard() {
     try {
       setIsLoading(true)
       setError(null)
+      
+      // Find selected account to get name
+      const selectedAccount = adAccounts.find(acc => acc.id === selectedAccountId)
+      const adAccountName = selectedAccount?.name || ''
+
       const response = await fetch('/api/meta/select-adaccount', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ adAccountId: selectedAccountId }),
+        body: JSON.stringify({ 
+          adAccountId: selectedAccountId,
+          adAccountName: adAccountName,
+        }),
       })
 
       if (!response.ok) {
@@ -126,6 +143,9 @@ export default function MetaConnectWizard() {
 
       setCurrentAdAccountId(selectedAccountId)
       setStep('connected')
+      
+      // Reload page to show selected account in integration page
+      window.location.reload()
     } catch (err) {
       setError('Hesap seçimi başarısız')
       setStep('error')
@@ -173,13 +193,15 @@ export default function MetaConnectWizard() {
           <CheckCircle2 className="w-5 h-5 text-green-600" />
           <span className="font-medium text-green-700">Bağlı</span>
         </div>
-        {selectedAccount && (
+        {selectedAccount ? (
           <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-            <span className="font-medium">{selectedAccount.name}</span>
+            <span className="font-medium">Hesap: {selectedAccount.name}</span>
             {selectedAccount.currency && (
               <span className="ml-2">({selectedAccount.currency})</span>
             )}
           </div>
+        ) : (
+          <div className="text-xs text-gray-500">Hesap seçilmedi</div>
         )}
         <button
           onClick={handleChangeAccount}
@@ -206,7 +228,31 @@ export default function MetaConnectWizard() {
           </label>
           <select
             value={selectedAccountId}
-            onChange={(e) => setSelectedAccountId(e.target.value)}
+            onChange={async (e) => {
+              const newAccountId = e.target.value;
+              setSelectedAccountId(newAccountId);
+              
+              // Save selection immediately on change
+              if (newAccountId) {
+                try {
+                  setIsLoading(true);
+                  await fetch("/api/meta/selected-adaccount", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ adAccountId: newAccountId }),
+                  });
+                  // Refresh page to update data
+                  window.location.reload();
+                } catch (err) {
+                  console.error("Failed to save account selection:", err);
+                  setError("Hesap kaydedilemedi");
+                } finally {
+                  setIsLoading(false);
+                }
+              }
+            }}
             disabled={isLoading}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-50"
           >
@@ -218,20 +264,6 @@ export default function MetaConnectWizard() {
             ))}
           </select>
         </div>
-        <button
-          onClick={handleSelectAccount}
-          disabled={isLoading || !selectedAccountId}
-          className="w-full px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Kaydediliyor...</span>
-            </>
-          ) : (
-            'Hesabı Kaydet'
-          )}
-        </button>
       </div>
     )
   }

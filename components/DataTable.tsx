@@ -13,9 +13,10 @@ interface Row {
 interface DataTableProps {
   columns: Column[]
   data: Row[]
+  actions?: (row: Row, index: number) => React.ReactNode
 }
 
-export default function DataTable({ columns, data }: DataTableProps) {
+export default function DataTable({ columns, data, actions }: DataTableProps) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="overflow-x-auto">
@@ -32,6 +33,7 @@ export default function DataTable({ columns, data }: DataTableProps) {
                   {column.label}
                 </th>
               ))}
+              {actions && <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">İşlemler</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -47,6 +49,11 @@ export default function DataTable({ columns, data }: DataTableProps) {
                     {row[column.key]}
                   </td>
                 ))}
+                {actions && (
+                  <td className="px-4 py-3 text-sm">
+                    {actions(row, index)}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

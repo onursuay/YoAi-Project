@@ -56,18 +56,31 @@ interface Ad {
   roas: number | null
 }
 
+interface InsightsData {
+  spendTRY: number
+  purchases: number
+  roas: number
+  impressions: number
+  clicks: number
+  ctr: number
+  cpcTRY: number
+}
+
 export default function MetaPage() {
   const [activeTab, setActiveTab] = useState('kampanyalar')
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [adsets, setAdsets] = useState<AdSet[]>([])
   const [ads, setAds] = useState<Ad[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [insightsLoading, setInsightsLoading] = useState(true)
+  const [insights, setInsights] = useState<InsightsData | null>(null)
   const [adAccountId, setAdAccountId] = useState<string | null>(null)
   const [adAccountName, setAdAccountName] = useState<string>('')
   const [dateRange, setDateRange] = useState({ preset: 'last_30d', start: '', end: '' })
   const [showInactive, setShowInactive] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [campaignsMap, setCampaignsMap] = useState<Record<string, string>>({})
+  const [editingBudget, setEditingBudget] = useState<Record<string, { editing: boolean; value: number }>>({})
 
   // Convert date preset to Meta API format
   const getMetaDatePreset = (preset: string): string => {
@@ -89,19 +102,38 @@ export default function MetaPage() {
         const statusResponse = await fetch('/api/meta/status')
         if (statusResponse.ok) {
           const statusData = await statusResponse.json()
-          if (statusData.connected && statusData.adAccountId) {
-            setAdAccountId(statusData.adAccountId)
+          if (statusData.connected) {
             setAdAccountName(statusData.adAccountName || '')
-            await fetchData('kampanyalar')
+            // Get selected ad account
+            const selectedResponse = await fetch('/api/meta/selected-adaccount')
+            if (selectedResponse.ok) {
+              const selectedData = await selectedResponse.json()
+              if (selectedData.adAccountId) {
+                setAdAccountId(selectedData.adAccountId)
+                await Promise.all([
+                  fetchData('kampanyalar'),
+                  fetchInsights(),
+                ])
+              } else {
+                setIsLoading(false)
+                setInsightsLoading(false)
+              }
+            } else {
+              setIsLoading(false)
+              setInsightsLoading(false)
+            }
           } else {
             setIsLoading(false)
+            setInsightsLoading(false)
           }
         } else {
           setIsLoading(false)
+          setInsightsLoading(false)
         }
       } catch (error) {
         console.error('Status check failed:', error)
         setIsLoading(false)
+        setInsightsLoading(false)
       }
     }
 
@@ -111,8 +143,32 @@ export default function MetaPage() {
   useEffect(() => {
     if (adAccountId) {
       fetchData(activeTab)
+      fetchInsights()
     }
   }, [activeTab, dateRange, adAccountId])
+
+  const fetchInsights = async () => {
+    if (!adAccountId) return
+
+    try {
+      setInsightsLoading(true)
+      const datePreset = getMetaDatePreset(dateRange.preset)
+      const response = await fetch(`/api/meta/insights?datePreset=${datePreset}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        setInsights(data)
+      } else {
+        // If error, set null to show placeholder
+        setInsights(null)
+      }
+    } catch (error) {
+      console.error('Failed to fetch insights:', error)
+      setInsights(null)
+    } finally {
+      setInsightsLoading(false)
+    }
+  }
 
   const fetchData = async (tab: string) => {
     if (!adAccountId) return
@@ -125,10 +181,10 @@ export default function MetaPage() {
         const response = await fetch(`/api/meta/campaigns?date_preset=${datePreset}`)
         if (response.ok) {
           const data = await response.json()
-          setCampaigns(data.campaigns || [])
+          setCampaigns(data.data || [])
           // Build campaigns map for adsets
           const map: Record<string, string> = {}
-          data.campaigns?.forEach((c: Campaign) => {
+          data.data?.forEach((c: Campaign) => {
             map[c.id] = c.name
           })
           setCampaignsMap(map)
@@ -137,19 +193,75 @@ export default function MetaPage() {
         const response = await fetch(`/api/meta/adsets?date_preset=${datePreset}`)
         if (response.ok) {
           const data = await response.json()
-          setAdsets(data.adsets || [])
+          setAdsets(data.data || [])
         }
       } else if (tab === 'reklamlar') {
         const response = await fetch(`/api/meta/ads?date_preset=${datePreset}`)
         if (response.ok) {
           const data = await response.json()
-          setAds(data.ads || [])
+          setAds(data.data || [])
         }
       }
     } catch (error) {
       console.error(`Failed to fetch ${tab}:`, error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleStatusToggle = async (objectId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE'
+    
+    try {
+      const response = await fetch('/api/meta/status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          objectId,
+          status: newStatus,
+        }),
+      })
+
+      if (response.ok) {
+        // Refresh the current tab data
+        await fetchData(activeTab)
+      } else {
+        const error = await response.json()
+        console.error('Failed to update status:', error)
+        alert('Durum güncellenemedi. Lütfen tekrar deneyin.')
+      }
+    } catch (error) {
+      console.error('Status toggle error:', error)
+      alert('Bir hata oluştu. Lütfen tekrar deneyin.')
+    }
+  }
+
+  const handleBudgetUpdate = async (adsetId: string, newBudget: number) => {
+    try {
+      const response = await fetch('/api/meta/adset-budget', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          adsetId,
+          dailyBudget: newBudget,
+        }),
+      })
+
+      if (response.ok) {
+        // Refresh adsets data
+        await fetchData('reklam-setleri')
+      } else {
+        const error = await response.json()
+        console.error('Failed to update budget:', error)
+        alert('Bütçe güncellenemedi. Lütfen tekrar deneyin.')
+      }
+    } catch (error) {
+      console.error('Budget update error:', error)
+      alert('Bir hata oluştu. Lütfen tekrar deneyin.')
     }
   }
 
@@ -213,8 +325,17 @@ export default function MetaPage() {
     return filtered
   }, [ads, showInactive, searchQuery])
 
-  // Calculate stats for active tab
+  // Use insights data for KPI cards if available
   const stats = useMemo(() => {
+    if (insights) {
+      return {
+        spend: insights.spendTRY,
+        purchases: insights.purchases,
+        roas: insights.roas,
+      }
+    }
+    
+    // Fallback to calculated stats from table data
     let items: (Campaign | AdSet | Ad)[] = []
     
     if (activeTab === 'kampanyalar') {
@@ -228,9 +349,6 @@ export default function MetaPage() {
     const totalSpend = items.reduce((sum, item) => sum + item.spent, 0)
     const totalPurchases = items.reduce((sum, item) => sum + item.purchases, 0)
     
-    // Calculate ROAS: total purchase value / total spend
-    // For now, we'll estimate from purchases count (simplified)
-    // In real implementation, we'd need purchase_value from action_values
     let roas: number | null = null
     const itemsWithRoas = items.filter(item => item.roas !== null && item.roas !== undefined)
     if (itemsWithRoas.length > 0 && totalSpend > 0) {
@@ -245,7 +363,7 @@ export default function MetaPage() {
       purchases: totalPurchases,
       roas,
     }
-  }, [activeTab, filteredCampaigns, filteredAdsets, filteredAds])
+  }, [insights, activeTab, filteredCampaigns, filteredAdsets, filteredAds])
 
   const tabs = [
     { id: 'kampanyalar', label: 'Kampanyalar' },
@@ -291,7 +409,9 @@ export default function MetaPage() {
   ]
 
   const formatCampaignData = (campaign: Campaign) => ({
-    status: (
+    _id: campaign.id,
+    _status: campaign.status,
+      status: (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${campaign.statusColor}`}>
         {campaign.statusLabel}
       </span>
@@ -307,7 +427,10 @@ export default function MetaPage() {
   })
 
   const formatAdsetData = (adset: AdSet) => ({
-    status: (
+    _id: adset.id,
+    _status: adset.status,
+    _budget: adset.budget,
+      status: (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${adset.statusColor}`}>
         {adset.statusLabel}
       </span>
@@ -324,7 +447,9 @@ export default function MetaPage() {
   })
 
   const formatAdData = (ad: Ad) => ({
-    status: (
+    _id: ad.id,
+    _status: ad.status,
+      status: (
       <span className={`px-2 py-1 text-xs font-medium rounded-full ${ad.statusColor}`}>
         {ad.statusLabel}
       </span>
@@ -346,6 +471,120 @@ export default function MetaPage() {
       return filteredAdsets.map(formatAdsetData)
     } else {
       return filteredAds.map(formatAdData)
+    }
+  }
+
+  const getTableActions = () => {
+    return (row: any, index: number) => {
+      const objectId = row._id
+      const currentStatus = row._status
+      const isEditing = editingBudget[objectId]?.editing || false
+      const budgetValue = editingBudget[objectId]?.value ?? row._budget ?? 0
+
+      if (activeTab === 'reklam-setleri') {
+        // AdSet: Status toggle + Budget edit
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleStatusToggle(objectId, currentStatus)}
+              className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+              title={currentStatus === 'ACTIVE' ? 'Duraklat' : 'Aktifleştir'}
+            >
+              {currentStatus === 'ACTIVE' ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
+            </button>
+            {isEditing ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={budgetValue}
+                  onChange={(e) => {
+                    setEditingBudget({
+                      ...editingBudget,
+                      [objectId]: { editing: true, value: parseFloat(e.target.value) || 0 },
+                    })
+                  }}
+                  className="w-20 px-2 py-1 text-xs border border-gray-300 rounded"
+                  step="0.01"
+                  min="0"
+                />
+                <button
+                  onClick={async () => {
+                    await handleBudgetUpdate(objectId, budgetValue)
+                    setEditingBudget({
+                      ...editingBudget,
+                      [objectId]: { editing: false, value: budgetValue },
+                    })
+                  }}
+                  className="p-1 text-green-600 hover:text-green-700"
+                  title="Kaydet"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingBudget({
+                      ...editingBudget,
+                      [objectId]: { editing: false, value: row._budget || 0 },
+                    })
+                  }}
+                  className="p-1 text-red-600 hover:text-red-700"
+                  title="İptal"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setEditingBudget({
+                    ...editingBudget,
+                    [objectId]: { editing: true, value: row._budget || 0 },
+                  })
+                }}
+                className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+                title="Bütçe Düzenle"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )
+      } else {
+        // Campaign/Ad: Status toggle only
+        return (
+          <button
+            onClick={() => handleStatusToggle(objectId, currentStatus)}
+            className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+            title={currentStatus === 'ACTIVE' ? 'Duraklat' : 'Aktifleştir'}
+          >
+            {currentStatus === 'ACTIVE' ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+          </button>
+        )
+      }
     }
   }
 
@@ -375,19 +614,19 @@ export default function MetaPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <StatCard
               title="Harcanan Tutar"
-              value={isLoading ? '...' : `₺${stats.spend.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              value={insightsLoading || isLoading ? '...' : insights ? `₺${insights.spendTRY.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₺0'}
               change={0}
               trend="up"
             />
             <StatCard
               title="Alışveriş Dönüşümü"
-              value={isLoading ? '...' : stats.purchases.toLocaleString('tr-TR')}
+              value={insightsLoading || isLoading ? '...' : insights ? insights.purchases.toLocaleString('tr-TR') : '0'}
               change={0}
               trend="up"
             />
             <StatCard
               title="ROAS"
-              value={isLoading ? '...' : stats.roas ? `${stats.roas.toFixed(1)}x` : '0x'}
+              value={insightsLoading || isLoading ? '...' : insights && insights.roas > 0 ? `${insights.roas.toFixed(1)}x` : '0x'}
               change={0}
               trend="up"
             />
@@ -412,7 +651,7 @@ export default function MetaPage() {
                   <p className="text-gray-600">Henüz veri bulunmuyor.</p>
                 </div>
               ) : (
-                <DataTable columns={getColumns()} data={getTableData()} />
+                <DataTable columns={getColumns()} data={getTableData()} actions={getTableActions()} />
               )}
             </div>
           </div>

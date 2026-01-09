@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { adAccountId } = body
+    const { adAccountId, adAccountName } = body
 
     if (!adAccountId || typeof adAccountId !== 'string') {
       return NextResponse.json(
@@ -14,24 +14,36 @@ export async function POST(request: Request) {
     }
 
     const cookieStore = await cookies()
-    const tokenCookie = cookieStore.get('meta_token')
+    const accessToken = cookieStore.get('meta_access_token')
 
-    if (!tokenCookie) {
+    if (!accessToken || !accessToken.value) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Not connected' },
         { status: 401 }
       )
     }
 
     const response = NextResponse.json({ ok: true })
 
-    response.cookies.set('meta_adaccount', adAccountId, {
+    // Set ad account ID cookie
+    response.cookies.set('meta_adaccount_id', adAccountId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 90,
+      maxAge: 60 * 60 * 24 * 30, // 30 days
       path: '/',
     })
+
+    // Set ad account name cookie if provided
+    if (adAccountName && typeof adAccountName === 'string') {
+      response.cookies.set('meta_adaccount_name', adAccountName, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30, // 30 days
+        path: '/',
+      })
+    }
 
     return response
   } catch (error) {

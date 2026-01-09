@@ -2,49 +2,21 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { metaGraphFetch } from '@/lib/metaGraph'
 
-export async function GET() {
-  const cookieStore = await cookies()
-  const accessToken = cookieStore.get('meta_access_token')
-
-  if (!accessToken || !accessToken.value) {
-    return NextResponse.json({ connected: false })
-  }
-
-  // Check token expiration if available
-  const expiresAtCookie = cookieStore.get('meta_access_expires_at')
-  if (expiresAtCookie) {
-    const expiresAt = parseInt(expiresAtCookie.value, 10)
-    if (Date.now() >= expiresAt) {
-      return NextResponse.json({ connected: false })
-    }
-  }
-
-  // Get selected ad account if available
-  const selectedAdAccountId = cookieStore.get('meta_selected_ad_account_id')
-  const selectedAdAccountName = cookieStore.get('meta_selected_ad_account_name')
-
-  return NextResponse.json({
-    connected: true,
-    adAccountId: selectedAdAccountId?.value || null,
-    adAccountName: selectedAdAccountName?.value || null,
-  })
-}
-
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { objectId, status } = body
+    const { adsetId, dailyBudget } = body
 
-    if (!objectId || typeof objectId !== 'string') {
+    if (!adsetId || typeof adsetId !== 'string') {
       return NextResponse.json(
-        { error: 'objectId is required' },
+        { error: 'adsetId is required' },
         { status: 400 }
       )
     }
 
-    if (!status || (status !== 'ACTIVE' && status !== 'PAUSED')) {
+    if (dailyBudget === undefined || dailyBudget === null || typeof dailyBudget !== 'number') {
       return NextResponse.json(
-        { error: 'status must be ACTIVE or PAUSED' },
+        { error: 'dailyBudget is required and must be a number' },
         { status: 400 }
       )
     }
@@ -71,11 +43,15 @@ export async function POST(request: Request) {
       }
     }
 
-    // Update status via Meta Graph API
-    const formData = new URLSearchParams()
-    formData.append('status', status)
+    // Convert TRY to minor units (TL * 100)
+    // UI sends TRY (e.g., 10000.00), Meta expects minor units (e.g., 1000000)
+    const dailyBudgetMinor = Math.round(dailyBudget * 100)
 
-    const response = await metaGraphFetch(`/${objectId}`, accessToken.value, {
+    // Update daily_budget via Meta Graph API
+    const formData = new URLSearchParams()
+    formData.append('daily_budget', dailyBudgetMinor.toString())
+
+    const response = await metaGraphFetch(`/${adsetId}`, accessToken.value, {
       method: 'POST',
       body: formData.toString(),
       headers: {
@@ -94,13 +70,15 @@ export async function POST(request: Request) {
       )
     }
 
-    const data = await response.json()    return NextResponse.json({
+    const data = await response.json()
+
+    return NextResponse.json({
       ok: true,
-      id: objectId,
-      status,
+      adsetId,
+      daily_budget: dailyBudgetMinor,
     })
   } catch (error) {
-    console.error('Status update error:', error)
+    console.error('Adset budget update error:', error)
     return NextResponse.json(
       {
         error: 'meta_api_error',

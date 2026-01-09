@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Topbar from '@/components/Topbar'
 import MetaConnectWizard from '@/components/meta/MetaConnectWizard'
@@ -8,12 +8,29 @@ import { Puzzle, Facebook, Search, MessageSquare, AlertCircle, ArrowRight } from
 
 function EntegrasyonContent() {
   const searchParams = useSearchParams()
+  const [selectedAccountName, setSelectedAccountName] = useState<string | null>(null)
 
   useEffect(() => {
     const metaParam = searchParams.get('meta')
     if (metaParam === 'connected' || metaParam === 'error' || metaParam === 'connected_pending') {
       window.history.replaceState({}, '', '/dashboard/settings/integrations')
     }
+    
+    // Check for selected account
+    const checkAccount = async () => {
+      try {
+        const response = await fetch('/api/meta/status')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.connected && data.adAccountName) {
+            setSelectedAccountName(data.adAccountName)
+          }
+        }
+      } catch (err) {
+        // Ignore errors
+      }
+    }
+    checkAccount()
   }, [searchParams])
   return (
     <>
@@ -52,7 +69,11 @@ function EntegrasyonContent() {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Meta Ads</h4>
-                      <p className="text-sm text-gray-500">Bağlan</p>
+                      {selectedAccountName ? (
+                        <p className="text-sm text-gray-600">Hesap: {selectedAccountName}</p>
+                      ) : (
+                        <p className="text-sm text-gray-500">Bağlan</p>
+                      )}
                     </div>
                   </div>
                 </div>

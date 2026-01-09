@@ -1,45 +1,37 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { decrypt } from '@/lib/meta/crypto'
-import { metaFetch } from '@/lib/meta/fetcher'
+import { metaGraphFetch } from '@/lib/metaGraph'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const datePreset = searchParams.get('date_preset') || 'last_30d'
+  const after = searchParams.get('after') || null
 
   const cookieStore = await cookies()
-  const tokenCookie = cookieStore.get('meta_token')
-  const adAccountCookie = cookieStore.get('meta_adaccount')
+  const accessToken = cookieStore.get('meta_access_token')
+  const selectedAdAccountId = cookieStore.get('meta_selected_ad_account_id')
 
-  if (!tokenCookie) {
+  if (!accessToken || !accessToken.value) {
     return NextResponse.json(
-      { error: 'Unauthorized' },
+      { error: 'missing_token' },
       { status: 401 }
     )
   }
 
-  if (!adAccountCookie) {
+  if (!selectedAdAccountId || !selectedAdAccountId.value) {
     return NextResponse.json(
-      { error: 'Ad account not selected' },
+      { error: 'no_ad_account_selected' },
       { status: 400 }
     )
   }
 
-  const decryptedToken = decrypt(tokenCookie.value)
-  if (!decryptedToken) {
-    return NextResponse.json(
-      { error: 'Invalid token' },
-      { status: 401 }
-    )
-  }
-
-  // Check token expiration
-  const expiresAtCookie = cookieStore.get('meta_token_expires_at')
+  // Check token expiration if available
+  const expiresAtCookie = cookieStore.get('meta_access_expires_at')
   if (expiresAtCookie) {
     const expiresAt = parseInt(expiresAtCookie.value, 10)
     if (Date.now() >= expiresAt) {
       return NextResponse.json(
-        { error: 'Token expired' },
+        { error: 'token_expired' },
         { status: 401 }
       )
     }
@@ -47,74 +39,36 @@ export async function GET(request: Request) {
 
   try {
     // Ensure ad_account_id starts with 'act_'
-    const accountId = adAccountCookie.value.startsWith('act_') 
-      ? adAccountCookie.value 
-      : `act_${adAccountCookie.value.replace('act_', '')}`
-    
-    // Build insights field with date_preset
-    const insightsField = `insights.date_preset(${datePreset}){spend,impressions,clicks,ctr,cpc,actions,action_values}`
-    
-    // Fetch campaigns with insights
-    const response = await metaFetch(
-      `/${accountId}/campaigns`,
-      decryptedToken,
-      {
-        params: {
-          fields: `id,name,status,effective_status,daily_budget,lifetime_budget,${insightsField}`,
-          limit: '100',
-        },
-      }
-    )
+    const accountId = selectedAdAccountId.value.startsWith('act_')
+      ? selectedAdAccountId.value
+      : `act_${selectedAdAccountId.value.replace('act_', '')}`
+
+    const params: Record<string, string> = {
+      fields: 'id,name,status,effective_status',
+      limit: '50',
+    }
+
+    if (after) {
+      params.after = after
+    }
+
+    const response = await metaGraphFetch(`/${accountId}/campaigns`, accessToken.value, {
+      params,
+    })
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      
-      // Handle rate limiting
-      if (response.status === 429) {
-        return NextResponse.json(
-          { error: 'Rate limit exceeded. Please try again later.' },
-          { status: 429 }
-        )
-      }
-
       return NextResponse.json(
-        { error: errorData.error?.message || 'Failed to fetch campaigns' },
-        { status: response.status }
+        {
+          error: 'meta_api_error',
+          details: errorData.error || { message: `HTTP ${response.status}` },
+        },
+        { status: 502 }
       )
     }
 
     const data = await response.json()
-    
-    // Process campaigns data
     const campaigns = (data.data || []).map((campaign: any) => {
-      const insights = campaign.insights?.data?.[0] || campaign.insights || {}
-      
-      // Parse actions for purchases
-      const actions = insights.actions || []
-      const purchaseAction = actions.find((a: any) => a.action_type === 'purchase')
-      const purchases = purchaseAction ? parseInt(purchaseAction.value || '0', 10) : 0
-      
-      // Calculate ROAS from action_values
-      let roas: number | null = null
-      if (insights.action_values && insights.action_values.length > 0) {
-        const purchaseValue = insights.action_values.find((av: any) => av.action_type === 'purchase')
-        if (purchaseValue && insights.spend) {
-          const spend = parseFloat(insights.spend || '0')
-          const value = parseFloat(purchaseValue.value || '0')
-          if (spend > 0) {
-            roas = value / spend
-          }
-        }
-      }
-
-      // Determine budget (daily_budget or lifetime_budget)
-      const budget = campaign.daily_budget 
-        ? parseFloat(campaign.daily_budget) 
-        : campaign.lifetime_budget 
-          ? parseFloat(campaign.lifetime_budget) 
-          : 0
-
-      // Format status
       const effectiveStatus = campaign.effective_status || campaign.status || 'UNKNOWN'
       const statusLabel = getStatusLabel(effectiveStatus)
       const statusColor = getStatusColor(effectiveStatus)
@@ -125,22 +79,30 @@ export async function GET(request: Request) {
         status: effectiveStatus,
         statusLabel,
         statusColor,
-        budget,
-        spent: parseFloat(insights.spend || '0'),
-        impressions: parseInt(insights.impressions || '0', 10),
-        clicks: parseInt(insights.clicks || '0', 10),
-        ctr: parseFloat(insights.ctr || '0'),
-        cpc: parseFloat(insights.cpc || '0'),
-        purchases,
-        roas,
+        budget: 0, // Budget not included in minimal field set
+        spent: 0,
+        impressions: 0,
+        clicks: 0,
+        ctr: 0,
+        cpc: 0,
+        purchases: 0,
+        roas: null,
       }
     })
 
-    return NextResponse.json({ campaigns })
+    const nextCursor = data.paging?.cursors?.after || null
+
+    return NextResponse.json({
+      data: campaigns,
+      paging: nextCursor ? { nextCursor } : {},
+    })
   } catch (error) {
     console.error('Campaigns fetch error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch campaigns' },
+      {
+        error: 'meta_api_error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     )
   }

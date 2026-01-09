@@ -1,143 +1,143 @@
-import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { decrypt } from '@/lib/meta/crypto'
-import { metaFetch, fetchAllPages } from '@/lib/meta/fetcher'
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const adAccountId = searchParams.get('ad_account_id')
-  const datePreset = searchParams.get('date_preset') || 'last_30d'
-  const since = searchParams.get('since')
-  const until = searchParams.get('until')
-  const limit = parseInt(searchParams.get('limit') || '100', 10)
+  const { searchParams } = new URL(request.url);
+  const datePreset = searchParams.get("datePreset") || "last_30d";
 
-  if (!adAccountId) {
+  const cookieStore = await cookies();
+  const accessToken = cookieStore.get("meta_access_token");
+  const selectedAdAccountId = cookieStore.get("meta_selected_ad_account_id");
+
+  if (!accessToken || !accessToken.value) {
     return NextResponse.json(
-      { error: 'ad_account_id is required' },
+      { error: "missing_token" },
+      { status: 401 }
+    );
+  }
+
+  if (!selectedAdAccountId || !selectedAdAccountId.value) {
+    return NextResponse.json(
+      { error: "no_ad_account_selected" },
       { status: 400 }
-    )
+    );
   }
 
-  const cookieStore = await cookies()
-  const tokenCookie = cookieStore.get('meta_token')
-
-  if (!tokenCookie) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
-  }
-
-  const decryptedToken = decrypt(tokenCookie.value)
-  if (!decryptedToken) {
-    return NextResponse.json(
-      { error: 'Invalid token' },
-      { status: 401 }
-    )
-  }
-
-  // Check token expiration
-  const expiresAtCookie = cookieStore.get('meta_token_expires_at')
+  // Check token expiration if available
+  const expiresAtCookie = cookieStore.get("meta_access_expires_at");
   if (expiresAtCookie) {
-    const expiresAt = parseInt(expiresAtCookie.value, 10)
+    const expiresAt = parseInt(expiresAtCookie.value, 10);
     if (Date.now() >= expiresAt) {
       return NextResponse.json(
-        { error: 'Token expired' },
+        { error: "token_expired" },
         { status: 401 }
-      )
+      );
     }
   }
 
   try {
     // Ensure ad_account_id starts with 'act_'
-    const accountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId.replace('act_', '')}`
-    
-    // Build query parameters
-    const params: Record<string, string> = {
-      fields: 'spend,impressions,clicks,ctr,cpc,cpp,reach,actions,action_values',
-      level: 'account',
-      limit: limit.toString(),
-    }
+    const accountId = selectedAdAccountId.value.startsWith("act_")
+      ? selectedAdAccountId.value
+      : `act_${selectedAdAccountId.value.replace("act_", "")}`;
 
-    if (datePreset && !since && !until) {
-      params.date_preset = datePreset
-    } else if (since && until) {
-      params.time_range = JSON.stringify({
-        since: since,
-        until: until,
-      })
-    } else {
-      // Default to last_30d if no date specified
-      params.date_preset = 'last_30d'
-    }
+    // Fetch insights from Meta Graph API
+    const url = new URL(`https://graph.facebook.com/v20.0/${accountId}/insights`);
+    url.searchParams.set("fields", "spend,impressions,clicks,ctr,cpc,actions,action_values,purchase_roas");
+    url.searchParams.set("date_preset", datePreset);
+    url.searchParams.set("limit", "1");
 
-    const response = await metaFetch(
-      `/${accountId}/insights`,
-      decryptedToken,
-      { params }
-    )
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken.value}`,
+        "Content-Type": "application/json",
+      },
+    });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      
-      // Handle rate limiting
-      if (response.status === 429) {
-        return NextResponse.json(
-          { error: 'Rate limit exceeded. Please try again later.' },
-          { status: 429 }
-        )
-      }
-
+      const errorData = await response.json().catch(() => ({}));
       return NextResponse.json(
-        { error: errorData.error?.message || 'Failed to fetch insights' },
-        { status: response.status }
-      )
+        {
+          error: "Failed to fetch insights",
+          details: errorData.error?.message || `HTTP ${response.status}`,
+        },
+        { status: 502 }
+      );
     }
 
-    const data = await response.json()
+    const data = await response.json();
+    const insights = data.data || [];
     
-    // Process insights data
-    const insights = (data.data || []).map((item: any) => {
-      // Parse actions if available
-      const actions = item.actions || []
-      const purchases = actions.find((a: any) => a.action_type === 'purchase')?.value || '0'
-      const purchasesCount = actions.find((a: any) => a.action_type === 'purchase')?.value || '0'
-      
-      // Calculate ROAS if we have purchase value and spend
-      let roas = null
-      if (item.action_values && item.action_values.length > 0) {
-        const purchaseValue = item.action_values.find((av: any) => av.action_type === 'purchase')?.value || '0'
-        const spend = parseFloat(item.spend || '0')
-        if (spend > 0) {
-          roas = (parseFloat(purchaseValue) / spend).toFixed(2)
-        }
-      }
+    // Aggregate insights data
+    const aggregated = insights.reduce(
+      (acc: any, item: any) => {
+        // Parse actions for purchases
+        const actions = item.actions || [];
+        const purchaseAction = actions.find((a: any) => a.action_type === "purchase");
+        const purchases = purchaseAction ? parseInt(purchaseAction.value || "0", 10) : 0;
+        acc.purchases += purchases;
 
-      return {
-        date_start: item.date_start,
-        date_stop: item.date_stop,
-        spend: parseFloat(item.spend || '0'),
-        impressions: parseInt(item.impressions || '0', 10),
-        clicks: parseInt(item.clicks || '0', 10),
-        ctr: parseFloat(item.ctr || '0'),
-        cpc: parseFloat(item.cpc || '0'),
-        cpp: parseFloat(item.cpp || '0'),
-        reach: parseInt(item.reach || '0', 10),
-        purchases: parseInt(purchasesCount, 10),
-        roas: roas ? parseFloat(roas) : null,
+        // Parse action_values for purchase value
+        const actionValues = item.action_values || [];
+        const purchaseValueAction = actionValues.find((av: any) => av.action_type === "purchase");
+        if (purchaseValueAction) {
+          acc.purchaseValue += parseFloat(purchaseValueAction.value || "0");
+        }
+
+        // Use purchase_roas if available, otherwise calculate from purchase value
+        if (item.purchase_roas) {
+          acc.roas = parseFloat(item.purchase_roas);
+        }
+
+        acc.spend += parseFloat(item.spend || "0");
+        acc.impressions += parseInt(item.impressions || "0", 10);
+        acc.clicks += parseInt(item.clicks || "0", 10);
+        acc.ctr += parseFloat(item.ctr || "0");
+        acc.cpc += parseFloat(item.cpc || "0");
+
+        return acc;
+      },
+      {
+        spend: 0,
+        purchases: 0,
+        purchaseValue: 0,
+        roas: 0,
+        impressions: 0,
+        clicks: 0,
+        ctr: 0,
+        cpc: 0,
       }
-    })
+    );
+
+    // Calculate ROAS if not already set
+    if (aggregated.roas === 0 && aggregated.spend > 0 && aggregated.purchaseValue > 0) {
+      aggregated.roas = aggregated.purchaseValue / aggregated.spend;
+    }
+
+    // Calculate average CTR and CPC
+    if (insights.length > 0) {
+      aggregated.ctr = aggregated.ctr / insights.length;
+      aggregated.cpc = aggregated.cpc / insights.length;
+    }
 
     return NextResponse.json({
-      insights,
-      paging: data.paging || null,
-    })
+      spendTRY: aggregated.spend,
+      purchases: aggregated.purchases,
+      roas: aggregated.roas || 0,
+      impressions: aggregated.impressions,
+      clicks: aggregated.clicks,
+      ctr: aggregated.ctr,
+      cpcTRY: aggregated.cpc,
+    });
   } catch (error) {
-    console.error('Insights fetch error:', error)
+    console.error("Insights fetch error:", error);
     return NextResponse.json(
-      { error: 'Failed to fetch insights' },
+      {
+        error: "Failed to fetch insights",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
-    )
+    );
   }
 }
-
