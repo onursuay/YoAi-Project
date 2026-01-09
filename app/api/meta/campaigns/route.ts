@@ -25,7 +25,6 @@ export async function GET(request: Request) {
     )
   }
 
-  // Check token expiration if available
   const expiresAtCookie = cookieStore.get('meta_access_expires_at')
   if (expiresAtCookie) {
     const expiresAt = parseInt(expiresAtCookie.value, 10)
@@ -38,62 +37,142 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Ensure ad_account_id starts with 'act_'
     const accountId = selectedAdAccountId.value.startsWith('act_')
       ? selectedAdAccountId.value
       : `act_${selectedAdAccountId.value.replace('act_', '')}`
 
-    const params: Record<string, string> = {
-      fields: 'id,name,status,effective_status',
-      limit: '50',
+    // Step 1: Fetch campaigns
+    const campaignParams: Record<string, string> = {
+      fields: 'id,name,status,effective_status,daily_budget,lifetime_budget',
+      limit: '25', // Reduced for faster insights fetching
     }
 
     if (after) {
-      params.after = after
+      campaignParams.after = after
     }
 
-    const response = await metaGraphFetch(`/${accountId}/campaigns`, accessToken.value, {
-      params,
-    })
+    const campaignResponse = await metaGraphFetch(
+      `/${accountId}/campaigns`,
+      accessToken.value,
+      { params: campaignParams }
+    )
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
+    if (!campaignResponse.ok) {
+      const errorData = await campaignResponse.json().catch(() => ({}))
       return NextResponse.json(
         {
           error: 'meta_api_error',
-          details: errorData.error || { message: `HTTP ${response.status}` },
+          details: errorData.error || { message: `HTTP ${campaignResponse.status}` },
         },
         { status: 502 }
       )
     }
 
-    const data = await response.json()
-    const campaigns = (data.data || []).map((campaign: any) => {
-      const effectiveStatus = campaign.effective_status || campaign.status || 'UNKNOWN'
-      const statusLabel = getStatusLabel(effectiveStatus)
-      const statusColor = getStatusColor(effectiveStatus)
+    const campaignData = await campaignResponse.json()
+    const campaigns = campaignData.data || []
 
-      return {
-        id: campaign.id,
-        name: campaign.name || 'Unnamed Campaign',
-        status: effectiveStatus,
-        statusLabel,
-        statusColor,
-        budget: 0, // Budget not included in minimal field set
-        spent: 0,
-        impressions: 0,
-        clicks: 0,
-        ctr: 0,
-        cpc: 0,
-        purchases: 0,
-        roas: null,
-      }
-    })
+    if (campaigns.length === 0) {
+      return NextResponse.json({
+        data: [],
+        paging: {},
+      })
+    }
 
-    const nextCursor = data.paging?.cursors?.after || null
+    // Step 2: Fetch insights for EACH campaign individually
+    const enrichedCampaigns = await Promise.all(
+      campaigns.map(async (campaign: any) => {
+        const effectiveStatus = campaign.effective_status || campaign.status || 'UNKNOWN'
+        const statusLabel = getStatusLabel(effectiveStatus)
+        const statusColor = getStatusColor(effectiveStatus)
+
+        // Budget (TRY formatting)
+        const dailyBudget = campaign.daily_budget 
+          ? parseFloat(campaign.daily_budget) / 100 
+          : 0
+        const lifetimeBudget = campaign.lifetime_budget 
+          ? parseFloat(campaign.lifetime_budget) / 100 
+          : 0
+        const budget = dailyBudget || lifetimeBudget
+
+        // Fetch insights for this specific campaign
+        let spend = 0, impressions = 0, clicks = 0, ctr = 0, cpc = 0, purchases = 0, roas = 0
+
+        try {
+          const insightsParams: Record<string, string> = {
+            fields: 'spend,impressions,clicks,ctr,cpc,actions,action_values,purchase_roas',
+            date_preset: datePreset,
+          }
+
+          const insightsResponse = await metaGraphFetch(
+            `/${campaign.id}/insights`,
+            accessToken.value,
+            { params: insightsParams }
+          )
+
+          if (insightsResponse.ok) {
+            const insightsData = await insightsResponse.json()
+            const insights = insightsData.data || []
+
+            if (insights.length > 0) {
+              const insight = insights[0] // Should be only one result per campaign
+
+              spend = insight.spend ? parseFloat(insight.spend) : 0
+              impressions = insight.impressions ? parseInt(insight.impressions, 10) : 0
+              clicks = insight.clicks ? parseInt(insight.clicks, 10) : 0
+              ctr = insight.ctr ? parseFloat(insight.ctr) : 0
+              cpc = insight.cpc ? parseFloat(insight.cpc) : 0
+
+              // Purchases
+              if (insight.actions) {
+                const purchaseAction = insight.actions.find(
+                  (a: any) => a.action_type === 'purchase' || a.action_type === 'omni_purchase'
+                )
+                if (purchaseAction) {
+                  purchases = parseInt(purchaseAction.value || '0', 10)
+                }
+              }
+
+              // ROAS
+              if (insight.purchase_roas) {
+                roas = parseFloat(insight.purchase_roas)
+              } else if (insight.action_values && spend > 0) {
+                const purchaseValue = insight.action_values.find(
+                  (av: any) => av.action_type === 'purchase' || av.action_type === 'omni_purchase'
+                )
+                if (purchaseValue) {
+                  const value = parseFloat(purchaseValue.value || '0')
+                  roas = value / spend
+                }
+              }
+            }
+          }
+        } catch (insightError) {
+          console.error(`Failed to fetch insights for campaign ${campaign.id}:`, insightError)
+          // Continue with 0 values
+        }
+
+        return {
+          id: campaign.id,
+          name: campaign.name || 'Unnamed Campaign',
+          status: effectiveStatus,
+          statusLabel,
+          statusColor,
+          budget: budget,
+          spent: spend,
+          impressions: impressions,
+          clicks: clicks,
+          ctr: ctr,
+          cpc: cpc,
+          purchases: purchases,
+          roas: roas > 0 ? roas : null,
+        }
+      })
+    )
+
+    const nextCursor = campaignData.paging?.cursors?.after || null
 
     return NextResponse.json({
-      data: campaigns,
+      data: enrichedCampaigns,
       paging: nextCursor ? { nextCursor } : {},
     })
   } catch (error) {
@@ -141,4 +220,3 @@ function getStatusColor(status: string): string {
   }
   return colorMap[status] || 'bg-gray-100 text-gray-800'
 }
-
