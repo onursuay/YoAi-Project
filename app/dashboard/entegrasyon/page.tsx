@@ -46,9 +46,9 @@ function EntegrasyonContent() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white rounded-xl border-2 border-primary p-6 hover:shadow-lg transition-shadow">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <img src="/integration-icons/meta.svg" alt="" width="32" height="32" />
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-transparent flex items-center justify-center">
+                      <img src="/integration-icons/meta.svg" alt="" className="h-6 w-6 object-contain" />
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Meta Ads</h4>
@@ -61,9 +61,9 @@ function EntegrasyonContent() {
 
               <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                      <img src="/integration-icons/google-ads.svg" alt="" width="32" height="32" />
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-transparent flex items-center justify-center">
+                      <img src="/integration-icons/google-ads.svg" alt="" className="h-6 w-6 object-contain" />
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Google Ads</h4>
@@ -78,9 +78,9 @@ function EntegrasyonContent() {
 
               <div className="bg-white rounded-xl border border-gray-200 p-6 opacity-60 cursor-not-allowed">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                      <img src="/integration-icons/tiktok.svg" alt="" width="32" height="32" />
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-transparent flex items-center justify-center">
+                      <img src="/integration-icons/tiktok.svg" alt="" className="h-6 w-6 object-contain" />
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">TikTok Ads</h4>
@@ -103,9 +103,9 @@ function EntegrasyonContent() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <img src="/integration-icons/google-analytics.svg" alt="" width="32" height="32" />
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-transparent flex items-center justify-center">
+                      <img src="/integration-icons/google-analytics.svg" alt="" className="h-6 w-6 object-contain" />
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Google Analytics</h4>
@@ -120,9 +120,9 @@ function EntegrasyonContent() {
 
               <div className="bg-white rounded-xl border border-gray-200 p-6 opacity-60 cursor-not-allowed">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                      <img src="/integration-icons/google-search-console.svg" alt="" width="32" height="32" />
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-transparent flex items-center justify-center">
+                      <img src="/integration-icons/google-search-console.svg" alt="" className="h-6 w-6 object-contain" />
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">Google Search Console</h4>
