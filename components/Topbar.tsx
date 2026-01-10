@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
 
 interface TopbarProps {
@@ -25,6 +25,8 @@ export default function Topbar({ title, description, actionButton, adAccountName
   const [showDropdown, setShowDropdown] = useState(false)
   const [adAccounts, setAdAccounts] = useState<AdAccount[]>([])
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     fetchAdAccounts()
@@ -37,7 +39,6 @@ export default function Topbar({ title, description, actionButton, adAccountName
         const data = await response.json()
         setAdAccounts(data.accounts || [])
         
-        // Get currently selected account
         const statusResponse = await fetch('/api/meta/status')
         if (statusResponse.ok) {
           const statusData = await statusResponse.json()
@@ -47,6 +48,20 @@ export default function Topbar({ title, description, actionButton, adAccountName
     } catch (error) {
       console.error('Failed to fetch ad accounts:', error)
     }
+  }
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+    setShowDropdown(true)
+  }
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => {
+      setShowDropdown(false)
+    }, 150)
   }
 
   const handleSelectAccount = async (accountId: string) => {
@@ -77,14 +92,18 @@ export default function Topbar({ title, description, actionButton, adAccountName
     <div className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{}</h1>
           <p className="text-sm text-gray-600 mt-1">{description}</p>
         </div>
         <div className="flex items-center gap-4">
           {adAccountName && (
-            <div className="relative">
+            <div 
+              className="relative"
+              ref={dropdownRef}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+            >
               <button
-                onClick={() => setShowDropdown(!showDropdown)}
                 className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-green-500 rounded-lg hover:bg-green-50 transition-colors"
               >
                 <div className="flex items-center gap-2">
@@ -137,7 +156,7 @@ export default function Topbar({ title, description, actionButton, adAccountName
               onClick={actionButton.onClick}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
             >
-              {actionButton.label}
+            actionButton.label}
             </button>
           )}
         </div>
