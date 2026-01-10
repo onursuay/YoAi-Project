@@ -58,6 +58,7 @@ export async function GET() {
     const accounts = (data.data || []).map((account: any) => ({
       id: account.id,
       name: account.name || 'Unnamed Account',
+      account_id: account.id, // Add account_id alias for compatibility
       status: account.account_status || 0,
       account_status: account.account_status || 0,
       currency: account.currency || '',
@@ -65,7 +66,7 @@ export async function GET() {
       timezone_name: account.timezone_name || '',
     }))
 
-    return NextResponse.json({ data: accounts })
+    return NextResponse.json({ accounts })
   } catch (error) {
     console.error('Ad accounts fetch error:', error)
     return NextResponse.json(

@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { QueryProvider } from './providers/query-provider'
 
 export const metadata: Metadata = {
   title: 'YoAI Dashboard',
@@ -14,11 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="tr">
-      <body>
-        <QueryProvider>
-          {children}
-        </QueryProvider>
-      </body>
+      <body>{children}</body>
     </html>
   )
 }
