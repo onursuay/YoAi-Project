@@ -28,8 +28,8 @@ export default function SidebarNav() {
         <Image 
           src="/logos/yoai-logo.png" 
           alt="YoAI" 
-          width={120} 
-          height={48}
+          width={40} 
+          height={16}
           className="object-contain"
         />
       </div>
