@@ -87,21 +87,8 @@ export default function Topbar({ title, description, actionButton, adAccountName
     }
   }
 
-  ret
+  return (
     <div className="bg-white border-b border-gray-200 px-6 py-4">
-      <style jsx>{`
-        @keyframes borderGlow {
-          0%, 100% {
-            box-shadow: 0 0 5px rgba(34, 197, 94, 0.3), 0 0 10px rgba(34, 197, 94, 0.1);
-          }
-          50% {
-            box-shadow: 0 0 10px rgba(34, 197, 94, 0.5), 0 0 20px rgba(34, 197, 94, 0.2);
-          }
-        }
-        .glow-button {
-          animation: borderGlow 3s ease-in-out infinite;
-        }
-      `}</style>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
@@ -114,9 +101,9 @@ export default function Topbar({ title, description, actionButton, adAccountName
               onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}
             >
-              <button className="glow-button flex items-center gap-2 px-4 py-2 bg-white border border-green-500 rounded-lg hover:bg-green-50 transition-colors">
+              <button className="flex items-center gap-2 px-4 py-2 bg-white border border-green-40nded-lg hover:bg-green-50 transition-all shadow-[0_0_8px_rgba(34,197,94,0.3)] hover:shadow-[0_0_12px_rgba(34,197,94,0.5)]">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <span className="text-sm font-medium text-gray-700">{adAccountName}</span>
                 </div>
                 <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
