@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Topbar from '@/components/Topbar'
-import MetaConnectWizard from '@/components/meta/MetaConnectWizard'
+import MetaConnectWizard from '@/components/MetaConnectWizard'
 import { Puzzle, Facebook, Search, MessageSquare, AlertCircle, ArrowRight } from 'lucide-react'
 
 function EntegrasyonContent() {
