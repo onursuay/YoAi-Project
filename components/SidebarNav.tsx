@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { navItems } from '@/lib/nav'
 import { Bell, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
+import Image from 'next/image'
 
 export default function SidebarNav() {
   const pathname = usePathname()
@@ -24,7 +25,13 @@ export default function SidebarNav() {
   return (
     <div className="w-64 bg-white border-r border-gray-200 h-screen flex flex-col">
       <div className="p-6 border-b border-gray-200">
-        <div className="text-2xl font-bold text-gray-900">YoAI</div>
+        <Image 
+          src="/logos/yoai-logo.png" 
+          alt="YoAI" 
+          width={120} 
+          height={48}
+          className="object-contain"
+        />
       </div>
 
       <nav className="flex-1 overflow-y-auto p-4 space-y-1">
@@ -138,4 +145,3 @@ export default function SidebarNav() {
     </div>
   )
 }
-
