@@ -87,8 +87,21 @@ export default function Topbar({ title, description, actionButton, adAccountName
     }
   }
 
-  return (
+  ret
     <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <style jsx>{`
+        @keyframes borderGlow {
+          0%, 100% {
+            box-shadow: 0 0 5px rgba(34, 197, 94, 0.3), 0 0 10px rgba(34, 197, 94, 0.1);
+          }
+          50% {
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.5), 0 0 20px rgba(34, 197, 94, 0.2);
+          }
+        }
+        .glow-button {
+          animation: borderGlow 3s ease-in-out infinite;
+        }
+      `}</style>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
@@ -101,7 +114,7 @@ export default function Topbar({ title, description, actionButton, adAccountName
               onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}
             >
-              <button className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-green-500 roulg hover:bg-green-50 transition-colors">
+              <button className="glow-button flex items-center gap-2 px-4 py-2 bg-white border border-green-500 rounded-lg hover:bg-green-50 transition-colors">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                   <span className="text-sm font-medium text-gray-700">{adAccountName}</span>
