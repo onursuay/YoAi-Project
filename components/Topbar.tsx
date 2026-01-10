@@ -25,7 +25,6 @@ export default function Topbar({ title, description, actionButton, adAccountName
   const [showDropdown, setShowDropdown] = useState(false)
   const [adAccounts, setAdAccounts] = useState<AdAccount[]>([])
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -92,20 +91,17 @@ export default function Topbar({ title, description, actionButton, adAccountName
     <div className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
           <p className="text-sm text-gray-600 mt-1">{description}</p>
         </div>
         <div className="flex items-center gap-4">
           {adAccountName && (
             <div 
               className="relative"
-              ref={dropdownRef}
               onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}
             >
-              <button
-                className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-green-500 rounded-lg hover:bg-green-50 transition-colors"
-              >
+              <button className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-green-500 roulg hover:bg-green-50 transition-colors">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                   <span className="text-sm font-medium text-gray-700">{adAccountName}</span>
@@ -123,9 +119,7 @@ export default function Topbar({ title, description, actionButton, adAccountName
                       <button
                         key={account.id}
                         onClick={() => handleSelectAccount(account.id)}
-                        className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
-                          selectedAccount === account.id ? 'bg-green-50' : ''
-                        }`}
+                        className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${selectedAccount === account.id ? 'bg-green-50' : ''}`}
                       >
                         <div className="flex items-center justify-between">
                           <div>
@@ -156,7 +150,7 @@ export default function Topbar({ title, description, actionButton, adAccountName
               onClick={actionButton.onClick}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
             >
-            actionButton.label}
+              {actionButton.label}
             </button>
           )}
         </div>
