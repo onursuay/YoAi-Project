@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { adAccountId, adAccountName } = body
+    const { adAccountId } = body
 
     if (!adAccountId || typeof adAccountId !== 'string') {
       return NextResponse.json(
@@ -23,27 +23,35 @@ export async function POST(request: Request) {
       )
     }
 
+    // Fetch account name from Meta API
+    const accountResponse = await fetch(
+      `https://graph.facebook.com/v20.0/${adAccountId}?fields=name&access_token=${accessToken.value}`
+    )
+    
+    let accountName = 'Unknown Account'
+    if (accountResponse.ok) {
+      const accountData = await accountResponse.json()
+      accountName = accountData.name || accountName
+    }
+
     const response = NextResponse.json({ ok: true })
 
-    // Set ad account ID cookie
-    response.cookies.set('meta_adaccount_id', adAccountId, {
+    // CORRECT cookie names to match status endpoint
+    response.cookies.set('meta_selected_ad_account_id', adAccountId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 30, // 30 days
+      maxAge: 60 * 60 * 24 * 30,
       path: '/',
     })
 
-    // Set ad account name cookie if provided
-    if (adAccountName && typeof adAccountName === 'string') {
-      response.cookies.set('meta_adaccount_name', adAccountName, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-        path: '/',
-      })
-    }
+    response.cookies.set('meta_selected_ad_account_name', accountName, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30,
+      path: '/',
+    })
 
     return response
   } catch (error) {
@@ -54,4 +62,3 @@ export async function POST(request: Request) {
     )
   }
 }
-
