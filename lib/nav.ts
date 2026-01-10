@@ -67,9 +67,9 @@ export const navItems: NavItem[] = [
     badge: 'AI',
   },
   {
-    id: 'iyzai',
-    label: 'IyzAi',
-    href: '/dashboard/iyzai',
+    id: 'yoai',
+    label: 'YoAi',
+    href: '/dashboard/yoai',
     icon: Sparkles,
   },
   {
